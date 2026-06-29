@@ -4571,27 +4571,54 @@ def mission_check_result(
 
 
 def inject_dark_mode_text_styles(st: Any) -> None:
-    """In dark mode, force page-background body text to white so it pops."""
+    """In dark mode, force page-background body text to white so it pops.
+
+    Text that sits on the app's dark background is lightened. Elements that
+    carry their own light background (cards, chips, tables) keep that light
+    background and dark text so they stay readable.
+    """
     st.markdown(
         """
         <style>
         @media (prefers-color-scheme: dark) {
+            /* Page-background text -> white so it pops against the dark theme. */
             .observation-slide-lead,
             .observation-slide-note,
             .observation-slide-features,
             .reward-slide-lead,
             .reward-slide-note,
+            .reward-pos,
+            .reward-neg,
             .action-slide-lead,
             .action-slide-note,
             .action-slide-forces,
             .algo-lead,
             .algo-note,
-            .mission-title,
-            .mission-task,
-            .mission-unlock,
-            .mission-step {
+            .net-arrow,
+            .net-label,
+            .snippet-arrow {
                 color: #ffffff !important;
             }
+
+            /* Cards/tables/chips/banners keep their light surface, so their
+               own (dark or accent) text stays readable. Re-assert a light
+               background in case the dark theme strips it. */
+            .lab-snippet,
+            .lab-snippet-panel,
+            .lab-chip,
+            .reward-teach-card,
+            .reward-compare-cell,
+            .reward-table,
+            .reward-table th,
+            .reward-table td,
+            .algo-card,
+            .lab-action-card,
+            .bonus-pick,
+            .mission-banner {
+                background: #ffffff !important;
+            }
+            .mission-banner { background: #f5faff !important; }
+            .mission-banner.bonus { background: #f6f4ff !important; }
         }
         </style>
         """,

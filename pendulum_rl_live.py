@@ -106,8 +106,6 @@ def reward_signal_observations(
     wrapped_theta = wrap_angle(theta)
     animal_distance = x - animal_position
     contact = animal_contact(raw_state, animal_position, animal_radius)
-    cart_near_width = max(0.01, animal_radius + CART_HALF_WIDTH)
-    pole_near_width = max(0.01, animal_radius + POLE_HALF_WIDTH)
     track_limit = 2.4
 
     state_signals = {
@@ -133,8 +131,6 @@ def reward_signal_observations(
         "alive": 1.0,
         "cart_off_screen": 1.0 if abs(x) >= track_limit else 0.0,
         "fell": 1.0 if terminated else 0.0,
-        "near_animal": max(0.0, 1.0 - float(contact["cart_distance"]) / cart_near_width),
-        "near_pole_touch": max(0.0, 1.0 - float(contact["pole_distance"]) / pole_near_width),
         "cart_hit_animal": 1.0 if contact["cart_hit"] else 0.0,
         "pole_hit_animal": 1.0 if contact["pole_hit"] else 0.0,
         "hit_animal": 1.0 if contact["hit"] else 0.0,
@@ -383,9 +379,7 @@ REWARD_SIGNAL_LABELS: dict[str, str] = {
     "fell": "fell",
     "animal_distance": "distance to animal",
     "abs_animal_distance": "|distance to animal|",
-    "near_animal": "cart near animal",
     "pole_distance_to_animal": "pole distance to animal",
-    "near_pole_touch": "pole near animal",
     "cart_hit_animal": "cart hit animal",
     "pole_hit_animal": "pole hit animal",
     "hit_animal": "cart or pole hit animal",
@@ -3321,10 +3315,9 @@ def reward_controls(st: Any) -> dict[str, Any]:
         signal_groups["Ethical exploration"] = [
             "hit_animal",
             "animal_distance",
-            "near_animal",
+            "cart_hit_animal",
             "pole_hit_animal",
             "pole_distance_to_animal",
-            "near_pole_touch",
         ]
 
     reward_pool = [

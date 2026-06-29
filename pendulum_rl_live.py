@@ -4658,6 +4658,13 @@ def run_streamlit_app() -> None:
     render_tutorial_anchor(st, "train")
     render_tutorial_callout(st, "train")
     train_button = st.button("Train agent", type="primary")
+    if train_button and count_reward_terms(weights) == 0:
+        st.warning(
+            "Your reward function is empty, so every step earns 0 reward and the "
+            "agent has nothing to learn (the reward curve stays flat at 0). Drag at "
+            "least one reward signal into the reward box, then train again."
+        )
+        train_button = False
     if train_button:
         results: list[TrainingResult] = []
         runs = [(weights, "Current reward")]

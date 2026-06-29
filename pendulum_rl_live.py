@@ -2788,14 +2788,17 @@ def render_reward_slideshow_page(st: Any) -> None:
     render_guided_prompt(
         st,
         step_label="Try it",
-        title="Build a reward that penalizes the cart drifting AND the pole leaning.",
-        body="Make a reward function that <strong>punishes how far the cart is from the center"
-        " and how far the pole is from upright</strong>. Drag in <strong>cart position</strong>"
-        " and <strong>pole angle</strong>, and shape them so a bigger drift or a bigger lean"
-        " gives a worse reward."
-        "<br><br><strong>Hint:</strong> use <strong>absolute value</strong> (so left and right"
-        " count the same), and think about what <strong>sign</strong> belongs in front &mdash;"
-        " should drifting away make the reward go up, or down?",
+        title="Build a reward that keeps the pole upright and the cart centered.",
+        body="Reward the agent for staying near the ideal pose. Drag in <strong>cart position</strong>"
+        " and <strong>pole angle</strong> and penalize drifting and leaning &mdash; use"
+        " <strong>absolute value</strong> (so left and right count the same) with a"
+        " <strong>negative</strong> sign in front."
+        "<br><br><strong>Watch out:</strong> if your reward is <em>only</em> penalties (every"
+        " step scores negative), the agent can end the episode early to stop collecting"
+        " negative reward &mdash; falling quickly beats surviving and accumulating more"
+        " penalty. To avoid this, add a <strong>positive</strong> term for staying in the game,"
+        " like a <strong>+1 alive</strong> bonus or <strong>cos(pole angle)</strong> (which is"
+        " positive when upright). The reward for staying up has to outweigh the penalties.",
     )
 
     reward_pool = [
@@ -2848,18 +2851,29 @@ def render_reward_slideshow_page(st: Any) -> None:
 
     penalizes_drift = drifted < centered - 1e-6 and abs(drift_left - drifted) < 1e-6
     penalizes_lean = leaning < centered - 1e-6 and abs(lean_left - leaning) < 1e-6
+    # Is staying in the ideal pose actually worth it? If even the best state pays
+    # a negative reward, the agent is better off ending the episode early, so a
+    # good balance reward should be positive when upright.
+    rewards_survival = centered > 1e-6
 
-    if has_cart and has_angle and penalizes_drift and penalizes_lean:
+    if has_cart and has_angle and penalizes_drift and penalizes_lean and rewards_survival:
         st.success(
-            "Nice — both drifting off-center and leaning over lower the reward, and left and"
-            " right are penalized equally. That is exactly a reward for staying centered and"
-            " upright."
+            "Nice — drifting and leaning lower the reward (equally on both sides), AND staying"
+            " centered and upright still pays a positive reward. The agent has a reason to keep"
+            " the pole up instead of giving up."
+        )
+    elif has_cart and has_angle and penalizes_drift and penalizes_lean and not rewards_survival:
+        st.warning(
+            "Careful — your reward is all penalties, so even the perfect pose scores ≤ 0. The"
+            " agent can stop the pain by falling over on purpose (ending the episode fast). Add a"
+            " **positive** term for staying up — e.g. **+1 alive** or **cos(pole angle)** — that"
+            " outweighs the penalties."
         )
     elif has_cart and has_angle:
         st.info(
-            "You have cart position and pole angle in there. Now make drifting and leaning each"
-            " **lower** the reward equally on both sides — wrap each in absolute value and put a"
-            " negative sign in front."
+            "You have cart position and pole angle in there. Make drifting and leaning each"
+            " **lower** the reward equally on both sides (absolute value + a negative sign), and"
+            " add a **positive** term (like **+1 alive**) so staying upright is worth it."
         )
     else:
         st.caption("Drag in cart position and pole angle to build the reward described above.")

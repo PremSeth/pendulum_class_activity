@@ -2020,9 +2020,10 @@ def render_observation_slideshow_page(st: Any) -> None:
             "group": "Pole",
         },
     ]
-    if st.session_state.get("observation_demo_builder_version") != "empty-v2":
+    if st.session_state.get("observation_demo_builder_version") != "empty-v3":
         st.session_state["observation_demo_builder_features"] = []
-        st.session_state["observation_demo_builder_version"] = "empty-v2"
+        st.session_state["observation_demo_builder_touched"] = False
+        st.session_state["observation_demo_builder_version"] = "empty-v3"
     selected_features = list(st.session_state["observation_demo_builder_features"])
     playground_columns = st.columns([1, 1])
     with playground_columns[0]:
@@ -2033,15 +2034,18 @@ def render_observation_slideshow_page(st: Any) -> None:
             value=selected_features,
             key="observation_demo_drag_canvas",
             height=330,
-            reset_id="observation-demo-empty-v2",
+            reset_id="observation-demo-empty-v3",
         )
         if isinstance(component_value, list):
-            selected_features = [
+            incoming_features = [
                 str(feature)
                 for feature in component_value
                 if str(feature) in OBSERVATION_LABELS
             ]
-            st.session_state["observation_demo_builder_features"] = selected_features
+            if incoming_features or st.session_state.get("observation_demo_builder_touched", False):
+                selected_features = incoming_features
+                st.session_state["observation_demo_builder_features"] = selected_features
+                st.session_state["observation_demo_builder_touched"] = True
         train_observation_demo = st.button(
             "Train with these observations",
             type="primary",
@@ -2934,9 +2938,10 @@ def render_action_slideshow_page(st: Any) -> None:
     )
     playground_columns = st.columns([1, 1])
     with playground_columns[0]:
-        if st.session_state.get("action_demo_builder_version") != "empty-v2":
+        if st.session_state.get("action_demo_builder_version") != "empty-v3":
             st.session_state["action_demo_builder_items"] = []
-            st.session_state["action_demo_builder_version"] = "empty-v2"
+            st.session_state["action_demo_builder_touched"] = False
+            st.session_state["action_demo_builder_version"] = "empty-v3"
         component_value = drag_canvas_component(
             mode="action",
             title="Agent actions",
@@ -2944,10 +2949,12 @@ def render_action_slideshow_page(st: Any) -> None:
             value=list(st.session_state["action_demo_builder_items"]),
             key="action_demo_drag_canvas",
             height=330,
-            reset_id="action-demo-builder-empty-v2",
+            reset_id="action-demo-builder-empty-v3",
         )
         if isinstance(component_value, list):
-            st.session_state["action_demo_builder_items"] = component_value
+            if component_value or st.session_state.get("action_demo_builder_touched", False):
+                st.session_state["action_demo_builder_items"] = component_value
+                st.session_state["action_demo_builder_touched"] = True
         action_forces = normalize_optional_action_builder_items(st.session_state["action_demo_builder_items"])
         if action_forces:
             forces = ", ".join(f"{force:g}" for force in action_forces)

@@ -559,7 +559,7 @@
       return {
         type: "term",
         signal: id,
-        factor: id === "hit_animal" ? -25 : 1,
+        factor: id === "hit_animal" ? -25 : id === "fell" ? -1 : 1,
         scale: defaultScaleFor(id),
       };
     }

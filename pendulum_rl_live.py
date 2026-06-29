@@ -4065,13 +4065,13 @@ def render_algorithm_comparison(st: Any) -> None:
                     "Algorithm": "Q-learning",
                     "State": "Discretized buckets",
                     "Learns": "A table of action values",
-                    "Lecture moment": "Easy to inspect, limited by bucket choices",
+                    "Tradeoff": "Easy to inspect, limited by bucket choices",
                 },
                 {
                     "Algorithm": "DQN",
                     "State": "Normalized observations",
                     "Learns": "A neural network that predicts action values",
-                    "Lecture moment": "Scales better, but each update is a neural-network step",
+                    "Tradeoff": "Scales better, but each update is a neural-network step",
                 },
             ]
         ),

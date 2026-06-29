@@ -2240,9 +2240,15 @@ def render_observation_slideshow_page(st: Any) -> None:
         render_guided_prompt(
             st,
             step_label="Nice work",
-            title="You have seen how observations shape behavior.",
-            body="Fewer or worse observations usually means the agent acts on incomplete"
-            " information. Continue to learn about <strong>actions</strong>.",
+            title="More observations is not always better.",
+            body="You may have noticed something surprising: removing an observation sometimes"
+            " makes the agent do <strong>better</strong>, not worse. Each observation you add"
+            " multiplies the size of the Q-table the agent has to fill in (with a 6-bin grid,"
+            " 2 observations = 36 cells, but 4 observations = 1296). With the same training"
+            " budget, more observations can mean each situation is visited less and learned"
+            " worse &mdash; so an extra signal can act like <strong>noise</strong> the agent"
+            " has to sort through. The right observations matter more than the most"
+            " observations. Continue to learn about <strong>actions</strong>.",
             tone="success",
         )
 

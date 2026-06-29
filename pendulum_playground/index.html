@@ -26,12 +26,12 @@
     .stage {
       border: 1px solid var(--line);
       border-radius: 12px;
-      background: linear-gradient(180deg, #f8fafc, #eef2f7);
+      background: #ffffff;
       padding: 6px;
       position: relative;
       user-select: none;
     }
-    canvas { display: block; width: 100%; height: auto; border-radius: 8px; cursor: grab; touch-action: none; }
+    canvas { display: block; width: 100%; height: auto; background: #ffffff; border-radius: 8px; cursor: grab; touch-action: none; }
     canvas.grabbing { cursor: grabbing; }
     .hint {
       font-size: 0.82rem;
@@ -129,7 +129,7 @@
   <div id="root">
     <div class="wrap">
       <div class="stage">
-        <canvas id="stage" width="640" height="420"></canvas>
+        <canvas id="stage" width="600" height="400"></canvas>
         <div class="hint">
           Drag the <strong>cart</strong> left and right, or grab the <strong>pole</strong> and swing it around.
           Watch every observation update live.
@@ -219,18 +219,31 @@
     const ctx = canvas.getContext("2d");
 
     // Pixel geometry.
-    const W = canvas.width, H = canvas.height;
-    const TRACK_Y = H * 0.62;
-    const PX_PER_M = (W * 0.40) / X_LIMIT; // map +/-X_LIMIT across most of the width
-    const CART_W = 90, CART_H = 44;
-    const POLE_LEN_PX = 150;
-    const POLE_W = 12;
+    // Match Gymnasium CartPole-v1 rendering geometry exactly.
+    const W = canvas.width, H = canvas.height;          // 600 x 400
+    const X_THRESHOLD = 2.4;                             // gym x_threshold
+    const WORLD_WIDTH = X_THRESHOLD * 2;                 // 4.8
+    const SCALE = W / WORLD_WIDTH;                       // px per meter (125)
+    const CART_W = 50, CART_H = 30;                      // gym cartwidth/height
+    const POLE_W = 10;                                   // gym polewidth
+    const POLE_LEN_PX = SCALE * (2 * 0.5);              // gym: scale * 2 * length (length 0.5)
+    const AXLE_OFFSET = CART_H / 4;                      // gym axleoffset (7.5)
+    const CART_Y = 100;                                  // gym carty (from top, after flip)
+    const TRACK_Y = CART_Y;                              // gym hline at carty
 
-    function cartPx() { return W / 2 + state.x * PX_PER_M; }
+    // Gym colors.
+    const COLOR_CART = "rgb(0,0,0)";
+    const COLOR_POLE = "rgb(202,152,101)";
+    const COLOR_AXLE = "rgb(129,132,203)";
+    const COLOR_TRACK = "rgb(0,0,0)";
+
+    function cartPx() { return state.x * SCALE + W / 2; }
 
     function poleTip() {
       const cx = cartPx();
-      const cy = TRACK_Y - CART_H / 2;
+      // Pivot sits at the axle, slightly below the cart center (gym flips the
+      // surface vertically, so +axleoffset lands just under the cart top here).
+      const cy = CART_Y + AXLE_OFFSET;
       // theta = 0 points straight up; positive theta tips to the right.
       return {
         baseX: cx, baseY: cy,
@@ -240,39 +253,28 @@
     }
 
     function draw() {
-      ctx.clearRect(0, 0, W, H);
-
-      // Track
-      ctx.strokeStyle = "#94a3b8";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(W * 0.06, TRACK_Y + CART_H / 2 + 4);
-      ctx.lineTo(W * 0.94, TRACK_Y + CART_H / 2 + 4);
-      ctx.stroke();
-
-      // Center reference tick
-      ctx.strokeStyle = "#cbd5e1";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(W / 2, TRACK_Y + CART_H / 2 + 1);
-      ctx.lineTo(W / 2, TRACK_Y + CART_H / 2 + 12);
-      ctx.stroke();
+      // White background, like the gym surface.
+      ctx.fillStyle = "rgb(255,255,255)";
+      ctx.fillRect(0, 0, W, H);
 
       const cx = cartPx();
 
-      // Cart
-      ctx.fillStyle = "#1d4ed8";
-      roundRect(ctx, cx - CART_W / 2, TRACK_Y - CART_H / 2, CART_W, CART_H, 8);
-      ctx.fill();
+      // Black track line through the axle height (gym hline at carty).
+      ctx.strokeStyle = COLOR_TRACK;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, CART_Y + 0.5);
+      ctx.lineTo(W, CART_Y + 0.5);
+      ctx.stroke();
 
-      // Wheels
-      ctx.fillStyle = "#0f172a";
-      circle(ctx, cx - CART_W / 3, TRACK_Y + CART_H / 2, 8);
-      circle(ctx, cx + CART_W / 3, TRACK_Y + CART_H / 2, 8);
+      // Black cart rectangle (gym cart_coords centered on cartx, carty).
+      ctx.fillStyle = COLOR_CART;
+      ctx.fillRect(cx - CART_W / 2, CART_Y - CART_H / 2, CART_W, CART_H);
 
-      // Pole
+      // Tan pole as a rotated rounded rectangle (gym pole polygon).
       const p = poleTip();
-      ctx.strokeStyle = "#b45309";
+      ctx.fillStyle = COLOR_POLE;
+      ctx.strokeStyle = COLOR_POLE;
       ctx.lineWidth = POLE_W;
       ctx.lineCap = "round";
       ctx.beginPath();
@@ -280,24 +282,11 @@
       ctx.lineTo(p.tipX, p.tipY);
       ctx.stroke();
 
-      // Pole tip knob
-      ctx.fillStyle = "#92400e";
-      circle(ctx, p.tipX, p.tipY, 10);
-
-      // Pivot
-      ctx.fillStyle = "#0f172a";
-      circle(ctx, p.baseX, p.baseY, 5);
+      // Purple axle circle at the pivot (gym filled_circle).
+      ctx.fillStyle = COLOR_AXLE;
+      circle(ctx, p.baseX, p.baseY, POLE_W / 2);
     }
 
-    function roundRect(c, x, y, w, h, r) {
-      c.beginPath();
-      c.moveTo(x + r, y);
-      c.arcTo(x + w, y, x + w, y + h, r);
-      c.arcTo(x + w, y + h, x, y + h, r);
-      c.arcTo(x, y + h, x, y, r);
-      c.arcTo(x, y, x + w, y, r);
-      c.closePath();
-    }
     function circle(c, x, y, r) { c.beginPath(); c.arc(x, y, r, 0, 2 * PI); c.fill(); }
 
     function fmt(v) {
@@ -362,8 +351,8 @@
 
       const cx = cartPx();
       if (
-        pt.x >= cx - CART_W / 2 - 6 && pt.x <= cx + CART_W / 2 + 6 &&
-        pt.y >= TRACK_Y - CART_H / 2 - 6 && pt.y <= TRACK_Y + CART_H / 2 + 12
+        pt.x >= cx - CART_W / 2 - 12 && pt.x <= cx + CART_W / 2 + 12 &&
+        pt.y >= CART_Y - CART_H / 2 - 12 && pt.y <= CART_Y + CART_H / 2 + 16
       ) return "cart";
       return null;
     }
@@ -387,13 +376,13 @@
       const dt = Math.max(0.016, (now - lastT) / 1000);
 
       if (dragMode === "cart") {
-        const newX = clamp((pt.x - W / 2) / PX_PER_M, -X_LIMIT, X_LIMIT);
+        const newX = clamp((pt.x - W / 2) / SCALE, -X_LIMIT, X_LIMIT);
         state.xDot = clamp((newX - lastX) / dt, -XDOT_LIMIT, XDOT_LIMIT);
         state.x = newX;
         lastX = newX;
       } else if (dragMode === "pole") {
         const cx = cartPx();
-        const cy = TRACK_Y - CART_H / 2;
+        const cy = CART_Y + AXLE_OFFSET;
         // angle from vertical: atan2(dx, -dy) so up = 0, right = +
         const newTheta = Math.atan2(pt.x - cx, -(pt.y - cy));
         let dTheta = wrapAngle(newTheta - lastTheta);
@@ -409,9 +398,8 @@
       if (!dragMode) return;
       dragMode = null;
       canvas.classList.remove("grabbing");
-      // Velocities settle to 0 once the student lets go.
-      state.xDot = 0;
-      state.thetaDot = 0;
+      // Keep the velocity imparted by the drag so momentum carries the cart /
+      // pole after release; gravity and friction take over from here.
       frame();
     }
 
@@ -427,16 +415,56 @@
       frame();
     });
 
+    // ---- Physics ------------------------------------------------------------
+    // theta = 0 is straight up; gravity pulls the pole toward the hanging
+    // position (theta = +/-pi). This is a pendulum pivoting on the cart.
+    const GRAVITY = 14.0;       // rad/s^2 scale for the angular pull
+    const POLE_DAMPING = 0.6;   // per-second angular friction
+    const CART_FRICTION = 1.8;  // per-second linear friction
+    const WALL_BOUNCE = 0.5;    // velocity retained when hitting a track limit
+
+    function physicsStep(dt) {
+      // Pole: gravity torque + damping (skipped while the student holds it).
+      if (dragMode !== "pole") {
+        // sin(theta) is 0 at upright/hanging, max at horizontal. Pull is away
+        // from upright, so the upright point is an unstable equilibrium.
+        const angAccel = GRAVITY * Math.sin(state.theta);
+        state.thetaDot += angAccel * dt;
+        state.thetaDot *= Math.exp(-POLE_DAMPING * dt);
+        state.thetaDot = clamp(state.thetaDot, -THETADOT_LIMIT, THETADOT_LIMIT);
+        state.theta = wrapAngle(state.theta + state.thetaDot * dt);
+      }
+
+      // Cart: coasts with friction and bounces off the track ends (skipped
+      // while the student holds it).
+      if (dragMode !== "cart") {
+        state.xDot *= Math.exp(-CART_FRICTION * dt);
+        state.x += state.xDot * dt;
+        if (state.x > X_LIMIT) { state.x = X_LIMIT; state.xDot = -Math.abs(state.xDot) * WALL_BOUNCE; }
+        if (state.x < -X_LIMIT) { state.x = -X_LIMIT; state.xDot = Math.abs(state.xDot) * WALL_BOUNCE; }
+        if (Math.abs(state.xDot) < 0.01) state.xDot = 0;
+      }
+    }
+
+    let lastTick = performance.now();
+    function loop(now) {
+      const dt = Math.min(0.05, Math.max(0.001, (now - lastTick) / 1000));
+      lastTick = now;
+      physicsStep(dt);
+      frame();
+      requestAnimationFrame(loop);
+    }
+
     window.addEventListener("message", (event) => {
       const data = event.data || {};
       if (data.type !== "streamlit:render") return;
-      frame();
       setHeight();
     });
 
     frame();
     setHeight();
     ready();
+    requestAnimationFrame(loop);
   </script>
 </body>
 </html>

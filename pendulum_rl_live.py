@@ -3978,7 +3978,7 @@ def mission_context(st: Any) -> dict[str, Any]:
         return {
             "id": "mission_2",
             "title": "Mission 2 — Centered balance with a DQN",
-            "task": "Train a DQN that balances for at least 150 steps while keeping the cart predominantly near the center.",
+            "task": "Train a DQN that balances for at least 100 steps while keeping the cart predominantly near the center.",
             "unlock": "Pass the check to unlock Mission 3.",
             "forced_algorithm": "DQN",
             "show_start_controls": False,
@@ -4352,10 +4352,10 @@ def mission_check_result(
         return False, f"Only {steps} steps (need 100). Adjust and retrain.", metrics
     if mission_id == "mission_2":
         fraction = metrics["mean_abs_cart_fraction"]
-        if steps >= 150 and fraction < 0.25:
+        if steps >= 100 and fraction < 0.25:
             return True, f"Balanced {steps} steps with average offset {fraction:.0%} of half-track. Goal met!", metrics
-        if steps < 150:
-            return False, f"Only {steps} steps (need 150).", metrics
+        if steps < 100:
+            return False, f"Only {steps} steps (need 100).", metrics
         return False, f"Balanced long enough, but average offset {fraction:.0%} of half-track is too far from center (need under 25%).", metrics
     # mission_3: ethical observation — balance while the agent can see the animal
     if steps >= 100:

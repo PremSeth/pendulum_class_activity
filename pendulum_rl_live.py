@@ -22,6 +22,7 @@ import os
 import pickle
 import random
 import sys
+import uuid
 from datetime import datetime
 from collections import deque
 from dataclasses import dataclass
@@ -540,6 +541,22 @@ DEFAULT_OBSERVATION_FEATURES: tuple[str, ...] = (
 
 
 _DRAG_CANVAS_COMPONENT: Any | None = None
+
+
+def drag_builder_session_token(st: Any) -> str:
+    """Stable per-session token for drag-canvas reset ids.
+
+    The drag component persists its live value in the browser's sessionStorage
+    keyed by reset_id so that a mid-interaction iframe remount does not flash the
+    box back to empty. Tying the reset_id to a per-session token keeps that key
+    stable within a session while ensuring a genuinely new session starts fresh
+    instead of restoring another session's stale value.
+    """
+    token = st.session_state.get("drag_builder_session_token")
+    if not token:
+        token = uuid.uuid4().hex
+        st.session_state["drag_builder_session_token"] = token
+    return str(token)
 
 
 def drag_canvas_component(
@@ -2034,7 +2051,7 @@ def render_observation_slideshow_page(st: Any) -> None:
             value=selected_features,
             key="observation_demo_drag_canvas",
             height=330,
-            reset_id="observation-demo-empty-v3",
+            reset_id=f"observation-demo-empty-v3:{drag_builder_session_token(st)}",
         )
         if isinstance(component_value, list):
             incoming_features = [
@@ -2949,7 +2966,7 @@ def render_action_slideshow_page(st: Any) -> None:
             value=list(st.session_state["action_demo_builder_items"]),
             key="action_demo_drag_canvas",
             height=330,
-            reset_id="action-demo-builder-empty-v3",
+            reset_id=f"action-demo-builder-empty-v3:{drag_builder_session_token(st)}",
         )
         if isinstance(component_value, list):
             if component_value or st.session_state.get("action_demo_builder_touched", False):

@@ -406,7 +406,34 @@
       streamlitMessage("streamlit:setFrameHeight", { height });
     }
 
+    function persistKeyFor(resetId) {
+      return "drag_canvas:" + String(resetId || "");
+    }
+
+    function persistValue() {
+      try {
+        window.sessionStorage.setItem(
+          persistKeyFor(state.resetId),
+          JSON.stringify(state.value)
+        );
+      } catch (err) {
+        /* sessionStorage may be unavailable; ignore. */
+      }
+    }
+
+    function restoredValueFor(resetId) {
+      try {
+        const raw = window.sessionStorage.getItem(persistKeyFor(resetId));
+        if (raw == null) return null;
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : null;
+      } catch (err) {
+        return null;
+      }
+    }
+
     function sendValue() {
+      persistValue();
       streamlitMessage("streamlit:setComponentValue", {
         value: state.value,
         dataType: "json",
@@ -1018,7 +1045,15 @@
       state.pool = Array.isArray(args.pool) ? args.pool : [];
       state.height = Number(args.height || 360);
       if (!state.initialized || incomingResetId !== state.resetId) {
-        const incomingValue = Array.isArray(args.value) ? args.value : [];
+        // On a fresh mount with the same reset_id (e.g. Streamlit remounts the
+        // iframe mid-interaction), prefer the live value we persisted so the
+        // box does not flash back to empty before session state catches up.
+        const restored = incomingResetId === state.resetId || !state.initialized
+          ? restoredValueFor(incomingResetId)
+          : null;
+        const incomingValue = restored != null
+          ? restored
+          : (Array.isArray(args.value) ? args.value : []);
         state.value = state.mode === "reward"
           ? normalizeRewardValue(incomingValue)
           : state.mode === "action"
@@ -1026,6 +1061,7 @@
             : incomingValue;
         state.initialized = true;
         state.resetId = incomingResetId;
+        persistValue();
       }
       render();
     });

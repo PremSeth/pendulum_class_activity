@@ -4652,14 +4652,16 @@ def run_streamlit_app() -> None:
 
     render_tutorial_anchor(st, "train")
     render_tutorial_callout(st, "train")
-    # Latch the click in session state so the training intent survives any
-    # extra rerun a component may trigger right after the click (which would
-    # otherwise consume the transient st.button() return and make the first
-    # click appear to do nothing).
+    # Latch the click in session state so the training intent survives an extra
+    # rerun a component may trigger right after the click (which would otherwise
+    # consume the transient st.button() return and make the first click appear
+    # to do nothing). The latch is only cleared once training actually runs, so
+    # a discarded/replaced rerun cannot drop it.
     if st.button("Train agent", type="primary"):
         st.session_state["train_requested"] = True
-    train_button = st.session_state.pop("train_requested", False)
+    train_button = bool(st.session_state.get("train_requested", False))
     if train_button and not observation_features:
+        st.session_state.pop("train_requested", None)
         st.warning(
             "Your observation box is empty, so the agent can't see anything and "
             "won't converge. Drag at least one observation (e.g. pole angle and "
@@ -4667,6 +4669,7 @@ def run_streamlit_app() -> None:
         )
         train_button = False
     if train_button and count_reward_terms(weights) == 0:
+        st.session_state.pop("train_requested", None)
         st.warning(
             "Your reward function is empty, so every step earns 0 reward and the "
             "agent has nothing to learn (the reward curve stays flat at 0). Drag at "
@@ -4674,6 +4677,7 @@ def run_streamlit_app() -> None:
         )
         train_button = False
     if train_button:
+        st.session_state.pop("train_requested", None)
         results: list[TrainingResult] = []
         runs = [(weights, "Current reward")]
 

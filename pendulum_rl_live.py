@@ -414,11 +414,14 @@ OBSERVATION_DEMO_REWARD_WEIGHTS: dict[str, Any] = {
 }
 
 
-# Reward used by the interactive observation/action playground demos: keep it as
-# simple as the lab default so students see the same -1 * fell signal at work.
+# Reward used by the interactive observation/action playground demos. A more
+# robust signal than -1 * fell: reward an upright pole (cos of pole angle) and a
+# centered cart (cos of cart position), so the agent is rewarded for the whole
+# ideal pose rather than just for not having fallen yet.
 CONTROLLED_DEMO_REWARD_WEIGHTS: dict[str, Any] = {
     "reward_terms": [
-        {"signal": "fell", "factor": -1.0, "scale": "unit"},
+        {"signal": "pole_angle", "factor": 1.0, "transform": "cos", "scale": "pi"},
+        {"signal": "cart_position", "factor": 1.0, "transform": "cos", "scale": "unit"},
     ],
 }
 
@@ -451,7 +454,7 @@ REWARD_DEMO_WEIGHTS: dict[str, dict[str, Any]] = {
 }
 
 
-CONTROLLED_DEMO_VERSION = "controlled-demo-v5-fell"
+CONTROLLED_DEMO_VERSION = "controlled-demo-v6-coscos"
 DEMO_EPISODES = 500
 # The reward demos need to converge enough to show the cos-vs-sin difference, so
 # they train longer than the snappy observation/action demos.
@@ -2153,8 +2156,8 @@ def render_observation_slideshow_page(st: Any) -> None:
     st.subheader("Experiment: what does the agent need to see?")
     st.markdown(
         '<div class="observation-slide-note">Same fixed Q-learning setup and the same reward'
-        ' (<strong>&minus;1 &times; fell</strong>). The only thing you change is what the agent'
-        ' can observe.</div>',
+        ' (<strong>cos(pole angle) + cos(cart position)</strong> &mdash; reward an upright pole'
+        ' and a centered cart). The only thing you change is what the agent can observe.</div>',
         unsafe_allow_html=True,
     )
 

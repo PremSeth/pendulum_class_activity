@@ -4022,7 +4022,7 @@ def mission_context(st: Any) -> dict[str, Any]:
         return {
             "id": "mission_3",
             "title": "Mission 3 — Ethical observation",
-            "task": "An animal is fixed at the center of the track. The cart starts randomly on the left or right side, the agent can see distance to the animal, and your job is to train a balancing agent.",
+            "task": "An animal is fixed at the center of the track. The cart starts randomly on the left or right side, the agent can see distance to the animal, and success means balancing for at least 100 steps.",
             "unlock": "Pass the check to unlock Bonus mode.",
             "forced_algorithm": None,
             "show_start_controls": False,
@@ -4451,8 +4451,8 @@ def mission_check_result(
         return False, f"Balanced long enough, but average offset {fraction:.0%} of half-track is too far from center (need under 25%).", metrics
     # mission_3: ethical observation — balance while the agent can see the animal
     if steps >= 100:
-        return True, f"Balanced {steps} steps with the animal observation. Goal met! Reflect on its behavior and save below.", metrics
-    return False, f"Only {steps} steps (need 100). Keep the animal observation and retrain a balancing agent.", metrics
+        return True, f"Balanced {steps} steps with the animal observation. Goal met: Mission 3 needs at least 100 steps.", metrics
+    return False, f"Only {steps} steps. Mission 3 success requires at least 100 balanced steps with the animal observation.", metrics
 
 
 def run_streamlit_app() -> None:

@@ -3616,11 +3616,6 @@ def behavior_controls(
             ]
             st.session_state["observation_builder_features"] = selected_features
 
-        if not selected_features:
-            # Keep the box visually empty but fall back to a valid observation
-            # locally so training still has something to learn from.
-            selected_features = ["pole_angle"]
-
         with st.expander("What the observation options mean", expanded=tutorial_enabled(st)):
             for feature in observation_pool:
                 st.markdown(
@@ -4658,6 +4653,13 @@ def run_streamlit_app() -> None:
     render_tutorial_anchor(st, "train")
     render_tutorial_callout(st, "train")
     train_button = st.button("Train agent", type="primary")
+    if train_button and not observation_features:
+        st.warning(
+            "Your observation box is empty, so the agent can't see anything and "
+            "won't converge. Drag at least one observation (e.g. pole angle and "
+            "pole spin) into the box, then train again."
+        )
+        train_button = False
     if train_button and count_reward_terms(weights) == 0:
         st.warning(
             "Your reward function is empty, so every step earns 0 reward and the "

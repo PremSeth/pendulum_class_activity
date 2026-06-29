@@ -3042,32 +3042,40 @@ def render_tutorial_callout(st: Any, target: str, ui: Any | None = None) -> None
     return
 
 
-def close_sidebar_on_first_load(st: Any) -> None:
-    st.html(
-        """
+def set_sidebar_default_for_stage(st: Any, *, expanded: bool) -> None:
+    action = "open" if expanded else "close"
+    storage_key = "pendulumSidebarOpenedForLab" if expanded else "pendulumSidebarClosedBeforeLab"
+    script = """
         <script>
         (function () {
-          const key = "pendulumSidebarClosedOnLoad";
+          const key = "__STORAGE_KEY__";
           if (window.sessionStorage.getItem(key) === "1") return;
           window.sessionStorage.setItem(key, "1");
 
-          function closeSidebarIfOpen() {
+          function syncSidebar() {
             const sidebar = document.querySelector('section[data-testid="stSidebar"]');
             const sidebarWidth = sidebar ? sidebar.getBoundingClientRect().width : 0;
-            if (sidebarWidth < 120) return;
+            const shouldOpen = "__ACTION__" === "open";
+            if (shouldOpen && sidebarWidth >= 120) return;
+            if (!shouldOpen && sidebarWidth < 120) return;
 
             const buttons = Array.from(document.querySelectorAll("button"));
-            const closeButton = buttons.find((button) => {
+            const targetButton = buttons.find((button) => {
               const label = `${button.getAttribute("aria-label") || ""} ${button.title || ""}`.toLowerCase();
+              if (shouldOpen) {
+                return label.includes("open sidebar") || label.includes("expand sidebar");
+              }
               return label.includes("close sidebar") || label.includes("collapse sidebar");
             });
-            if (closeButton) closeButton.click();
+            if (targetButton) targetButton.click();
           }
 
-          [80, 250, 700, 1300].forEach((delay) => setTimeout(closeSidebarIfOpen, delay));
+          [80, 250, 700, 1300].forEach((delay) => setTimeout(syncSidebar, delay));
         })();
         </script>
-        """,
+        """
+    st.html(
+        script.replace("__STORAGE_KEY__", storage_key).replace("__ACTION__", action),
         unsafe_allow_javascript=True,
     )
 
@@ -4488,17 +4496,18 @@ def mission_check_result(
 def run_streamlit_app() -> None:
     modules = require_dependencies("streamlit", "numpy", "pandas", "matplotlib.pyplot", "gymnasium", "torch")
     st = modules["streamlit"]
+    stage = str(st.session_state.get("app_stage", "intro"))
+    lab_stage = stage == "lab"
 
     st.set_page_config(
         page_title="Live RL Pendulum Lab",
         page_icon="RL",
         layout="wide",
-        initial_sidebar_state="collapsed",
+        initial_sidebar_state="expanded" if lab_stage else "collapsed",
     )
-    close_sidebar_on_first_load(st)
+    set_sidebar_default_for_stage(st, expanded=lab_stage)
     render_instructor_controls(st)
 
-    stage = str(st.session_state.get("app_stage", "intro"))
     if stage == "intro":
         render_intro_page(st)
         return

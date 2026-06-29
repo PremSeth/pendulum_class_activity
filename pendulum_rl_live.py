@@ -4639,8 +4639,6 @@ def run_streamlit_app() -> None:
         status = st.empty()
         reward_chart_caption = st.empty()
         reward_chart = st.empty()
-        checkpoint_caption = st.empty()
-        checkpoint_row = st.empty()
         reward_chart_caption.caption(
             "Live total reward per episode (you want this trending up toward the most "
             "reward an episode can earn in the ideal CartPole state you defined — e.g. if "
@@ -4648,19 +4646,6 @@ def run_streamlit_app() -> None:
             "step the agent holds the ideal pose, so a perfect episode tops out near 3 x the "
             "step limit and the curve should climb toward that over time)"
         )
-        checkpoint_caption.caption("Policy checkpoints (a short clip of the current policy every 1/5 of training)")
-        checkpoint_clips: list[dict[str, Any]] = []
-
-        def render_checkpoint_row() -> None:
-            if not checkpoint_clips:
-                return
-            with checkpoint_row.container():
-                columns = st.columns(len(checkpoint_clips))
-                for column, clip in zip(columns, checkpoint_clips):
-                    with column:
-                        st.caption(f"Episode {clip['done']}/{clip['total']}")
-                        if clip["gif_bytes"]:
-                            st.image(clip["gif_bytes"], width="stretch")
 
         for run_index, (run_weights, label) in enumerate(runs):
             def update_progress(
@@ -4680,23 +4665,12 @@ def run_streamlit_app() -> None:
                         height=220,
                     )
 
-            def update_checkpoint(done: int, total: int, snapshot: TrainingResult) -> None:
-                checkpoint_clips.append(
-                    {
-                        "done": done,
-                        "total": total,
-                        "gif_bytes": checkpoint_rollout_gif(snapshot),
-                    }
-                )
-                render_checkpoint_row()
-
             with st.spinner(f"Training {label}..."):
                 result = train_agent(
                     settings,
                     run_weights,
                     update_progress,
                     label,
-                    update_checkpoint,
                 )
                 results.append(result)
 
@@ -4713,8 +4687,6 @@ def run_streamlit_app() -> None:
         status.empty()
         reward_chart_caption.empty()
         reward_chart.empty()
-        checkpoint_caption.empty()
-        checkpoint_row.empty()
 
     results = st.session_state.get("results", [])
     if results:

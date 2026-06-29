@@ -3042,6 +3042,36 @@ def render_tutorial_callout(st: Any, target: str, ui: Any | None = None) -> None
     return
 
 
+def close_sidebar_on_first_load(st: Any) -> None:
+    st.html(
+        """
+        <script>
+        (function () {
+          const key = "pendulumSidebarClosedOnLoad";
+          if (window.sessionStorage.getItem(key) === "1") return;
+          window.sessionStorage.setItem(key, "1");
+
+          function closeSidebarIfOpen() {
+            const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+            const sidebarWidth = sidebar ? sidebar.getBoundingClientRect().width : 0;
+            if (sidebarWidth < 120) return;
+
+            const buttons = Array.from(document.querySelectorAll("button"));
+            const closeButton = buttons.find((button) => {
+              const label = `${button.getAttribute("aria-label") || ""} ${button.title || ""}`.toLowerCase();
+              return label.includes("close sidebar") || label.includes("collapse sidebar");
+            });
+            if (closeButton) closeButton.click();
+          }
+
+          [80, 250, 700, 1300].forEach((delay) => setTimeout(closeSidebarIfOpen, delay));
+        })();
+        </script>
+        """,
+        unsafe_allow_javascript=True,
+    )
+
+
 def is_network_url_session(st: Any) -> bool:
     try:
         url = str(st.context.url or "")
@@ -4465,6 +4495,7 @@ def run_streamlit_app() -> None:
         layout="wide",
         initial_sidebar_state="collapsed",
     )
+    close_sidebar_on_first_load(st)
     render_instructor_controls(st)
 
     stage = str(st.session_state.get("app_stage", "intro"))

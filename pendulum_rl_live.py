@@ -3975,10 +3975,22 @@ def render_algorithm_comparison(st: Any) -> None:
 # ---------------------------------------------------------------------------
 SUBMISSIONS_DIR = Path(__file__).resolve().parent / "submissions"
 MISSION_ORDER = ("mission_1", "mission_2", "mission_3")
+DEFAULT_INSTRUCTOR_PASSWORD = "pendulum-master"
+
+
+def instructor_password(st: Any) -> str:
+    try:
+        configured = str(st.secrets.get("instructor_password", "")).strip()
+    except Exception:
+        configured = ""
+    return configured or os.environ.get("PENDULUM_MASTER_PASSWORD", DEFAULT_INSTRUCTOR_PASSWORD)
 
 
 def active_mission(st: Any) -> str:
     """The mission the page is currently focused on (or 'bonus' once all done)."""
+    override = str(st.session_state.get("mission_override", ""))
+    if override in (*MISSION_ORDER, "bonus"):
+        return override
     progress = set(st.session_state.get("mission_progress", []))
     for mission_id in MISSION_ORDER:
         if mission_id not in progress:
@@ -4197,6 +4209,65 @@ def mark_mission_complete(st: Any, mission_id: str) -> None:
         st.session_state["mission_progress"] = progress
 
 
+def render_instructor_controls(st: Any) -> None:
+    with st.sidebar.expander("Instructor controls"):
+        if not st.session_state.get("instructor_unlocked", False):
+            password = st.text_input("Master password", type="password", key="instructor_password_input")
+            if st.button("Unlock", key="instructor_unlock"):
+                if password == instructor_password(st):
+                    st.session_state["instructor_unlocked"] = True
+                    st.success("Unlocked.")
+                    request_streamlit_rerun(st)
+                else:
+                    st.error("Wrong password.")
+            return
+
+        st.success("Instructor mode unlocked.")
+        page_options = {
+            "Home": "intro",
+            "Background": "background",
+            "Observation slides": "observation_demo",
+            "Action slides": "action_demo",
+            "Algorithm slides": "algorithm_demo",
+            "Reward slides": "reward_demo",
+            "Lab": "lab",
+        }
+        current_stage = str(st.session_state.get("app_stage", "lab"))
+        page_labels = list(page_options)
+        current_page_index = next(
+            (index for index, label in enumerate(page_labels) if page_options[label] == current_stage),
+            page_labels.index("Lab"),
+        )
+        selected_page = st.selectbox("Jump to page", page_labels, index=current_page_index)
+        if st.button("Go", key="instructor_go_page"):
+            set_app_stage(st, page_options[selected_page])
+
+        mission_options = {
+            "Mission 1": ("mission_1", None),
+            "Mission 2": ("mission_2", None),
+            "Mission 3": ("mission_3", None),
+            "Bonus menu": ("bonus", None),
+            "Bonus 1: one-term reward": ("bonus", "one_term"),
+            "Bonus 2: swing-up": ("bonus", "swingup"),
+            "Bonus 3: pole length": ("bonus", "pole_length"),
+        }
+        selected_mission = st.selectbox("Jump to mission", list(mission_options))
+        if st.button("Switch mission", key="instructor_switch_mission"):
+            mission_id, bonus_task = mission_options[selected_mission]
+            st.session_state["mission_override"] = mission_id
+            st.session_state["bonus_task"] = bonus_task
+            set_app_stage(st, "lab")
+
+        if st.button("Resume normal mission flow", key="instructor_resume_flow"):
+            st.session_state.pop("mission_override", None)
+            st.session_state["bonus_task"] = None
+            set_app_stage(st, "lab")
+
+        if st.button("Lock instructor mode", key="instructor_lock"):
+            st.session_state["instructor_unlocked"] = False
+            request_streamlit_rerun(st)
+
+
 def render_mission_explanations(st: Any, mission_id: str) -> dict[str, str]:
     st.markdown("**Explain your design choices** (saved for grading):")
     reward_text = st.text_area(
@@ -4396,6 +4467,7 @@ def run_streamlit_app() -> None:
     st = modules["streamlit"]
 
     st.set_page_config(page_title="Live RL Pendulum Lab", page_icon="RL", layout="wide")
+    render_instructor_controls(st)
 
     stage = str(st.session_state.get("app_stage", "intro"))
     if stage == "intro":

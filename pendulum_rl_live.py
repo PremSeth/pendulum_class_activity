@@ -2242,12 +2242,20 @@ def render_observation_slideshow_page(st: Any) -> None:
             step_label="Nice work",
             title="More observations is not always better.",
             body="You may have noticed something surprising: removing an observation sometimes"
-            " makes the agent do <strong>better</strong>, not worse. Each observation you add"
-            " multiplies the size of the Q-table the agent has to fill in (with a 6-bin grid,"
-            " 2 observations = 36 cells, but 4 observations = 1296). With the same training"
-            " budget, more observations can mean each situation is visited less and learned"
-            " worse &mdash; so an extra signal can act like <strong>noise</strong> the agent"
-            " has to sort through. The right observations matter more than the most"
+            " makes the agent do <strong>better</strong>, not worse. Two reasons:<br><br>"
+            "<strong>1. Size.</strong> Each observation you add multiplies the size of the"
+            " Q-table the agent has to fill in (with a 6-bin grid, 2 observations = 36 cells,"
+            " but 4 observations = 1296). With the same training budget, more observations can"
+            " mean each situation is visited less and learned worse &mdash; an extra signal can"
+            " act like <strong>noise</strong>.<br><br>"
+            "<strong>2. Some signals are harder to read patterns from.</strong> Pole angle and"
+            " cart position both swing from positive to negative as they cross the center"
+            " (upright pole, centered cart). The agent has to learn that a value and its"
+            " mirror-image opposite call for <em>opposite</em> actions &mdash; lean right, push"
+            " right; lean left, push left &mdash; and the bin grid splits those two sides right"
+            " at the boundary. That sign-flipping pattern is trickier to pin down than a"
+            " smoother, less symmetric signal.<br><br>"
+            "The <strong>right</strong> observations matter more than the <strong>most</strong>"
             " observations. Continue to learn about <strong>actions</strong>.",
             tone="success",
         )
@@ -3272,7 +3280,7 @@ def render_action_slideshow_page(st: Any) -> None:
             title="Drag in just −10 and +10, then train.",
             body="The agent can only shove left or shove right &mdash; it can never sit still."
             " <strong>Predict:</strong> how will the cart and pole look while it tries to"
-            " balance? Train and watch the jitter.",
+            " balance? Then train.",
         )
     elif not did_coast:
         render_guided_prompt(

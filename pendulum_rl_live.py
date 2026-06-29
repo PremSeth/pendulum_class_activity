@@ -3066,7 +3066,7 @@ def sidebar_settings(st: Any, forced_algorithm: str | None = None) -> TrainSetti
     cpu_count = os.cpu_count() or 1
     shared_hosting = is_network_url_session(st)
     default_episodes = 120 if algorithm == "Q-learning" or shared_hosting else 300
-    max_episodes = 500 if algorithm == "Q-learning" else 3_000
+    max_episodes = 500 if algorithm == "Q-learning" else 400
     episode_step = 20 if algorithm == "Q-learning" else 50
     episodes = int(
         st.sidebar.slider(

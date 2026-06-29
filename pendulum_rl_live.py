@@ -684,6 +684,7 @@ class TrainSettings:
     animal_contact_ends_episode: bool = True
     # Half-pole length used by the CartPole physics (Gymnasium default is 0.5).
     pole_length: float = 0.5
+    random_start_around_animal: bool = False
 
 
 @dataclass
@@ -713,6 +714,15 @@ def reset_env(env: Any, settings: TrainSettings, seed: int) -> Any:
     base_env = env.unwrapped
     base_env.length = float(settings.pole_length)
     base_env.polemass_length = base_env.masspole * base_env.length
+
+    if settings.random_start_around_animal:
+        rng = np.random.default_rng(seed)
+        side = -1.0 if rng.random() < 0.5 else 1.0
+        start_x = clamp(settings.animal_position + side * 0.85, -1.6, 1.6)
+        start_theta = float(rng.uniform(-0.04, 0.04))
+        custom_state = (start_x, 0.0, start_theta, 0.0)
+        base_env.state = np.array(custom_state, dtype=np.float64)
+        return np.array(custom_state, dtype=np.float32)
 
     if settings.initial_state is None:
         return obs
@@ -3565,10 +3575,30 @@ def behavior_controls(
     return tuple(selected_features), tuple(action_forces), initial_state, terminate_on_angle
 
 
-def ethical_controls(st: Any, settings: TrainSettings) -> None:
+def ensure_animal_distance_observation(st: Any) -> None:
+    st.session_state.setdefault("observation_builder_features", list(DEFAULT_OBSERVATION_FEATURES))
+    if "animal_distance" not in st.session_state["observation_builder_features"]:
+        st.session_state["observation_builder_features"].append("animal_distance")
+
+
+def ethical_controls(st: Any, settings: TrainSettings, locked: bool = False) -> None:
     render_tutorial_anchor(st, "ethical")
     st.subheader("Ethical exploration")
     render_tutorial_callout(st, "ethical")
+    if locked:
+        settings.ethical_exploration = True
+        settings.animal_position = 0.0
+        settings.animal_radius = 0.18
+        settings.animal_contact_ends_episode = True
+        settings.random_start_around_animal = True
+        st.session_state["ethical_exploration_enabled"] = True
+        ensure_animal_distance_observation(st)
+        st.markdown(
+            "Mission 3 automatically places the animal at the center of the track. "
+            "The cart starts randomly on the left or right side, and the agent can see distance to the animal."
+        )
+        return
+
     enabled = st.checkbox(
         "Put an animal on the track",
         value=False,
@@ -3623,9 +3653,7 @@ def ethical_controls(st: Any, settings: TrainSettings) -> None:
         )
 
     if add_distance:
-        st.session_state.setdefault("observation_builder_features", list(DEFAULT_OBSERVATION_FEATURES))
-        if "animal_distance" not in st.session_state["observation_builder_features"]:
-            st.session_state["observation_builder_features"].append("animal_distance")
+        ensure_animal_distance_observation(st)
 
     st.caption("The cart and pole can now hit the animal. Use hit-animal reward blocks to teach avoidance.")
 
@@ -3755,6 +3783,7 @@ def replay_signature(result: TrainingResult) -> tuple[Any, ...]:
         result.settings.animal_radius,
         result.settings.animal_contact_ends_episode,
         result.settings.pole_length,
+        result.settings.random_start_around_animal,
     )
 
 
@@ -3988,11 +4017,12 @@ def mission_context(st: Any) -> dict[str, Any]:
         return {
             "id": "mission_3",
             "title": "Mission 3 — Ethical observation",
-            "task": "An animal is on the track. Give the agent the distance-to-animal observation, train a balancing agent, and reflect on how it behaves around the animal.",
+            "task": "An animal is fixed at the center of the track. The cart starts randomly on the left or right side, the agent can see distance to the animal, and your job is to train a balancing agent.",
             "unlock": "Pass the check to unlock Bonus mode.",
             "forced_algorithm": None,
             "show_start_controls": False,
             "show_ethical": True,
+            "locked_ethical": True,
             "forced_start": None,
             "show_pole_length": False,
         }
@@ -4394,9 +4424,10 @@ def run_streamlit_app() -> None:
 
     settings = sidebar_settings(st, forced_algorithm=context["forced_algorithm"])
     if context["show_ethical"]:
-        ethical_controls(st, settings)
+        ethical_controls(st, settings, locked=bool(context.get("locked_ethical", False)))
     else:
         settings.ethical_exploration = False
+        settings.random_start_around_animal = False
     observation_features, action_forces, initial_state, terminate_on_angle = behavior_controls(
         st,
         show_start_controls=context["show_start_controls"],

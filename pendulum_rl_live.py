@@ -2888,7 +2888,9 @@ def render_reward_slideshow_page(st: Any) -> None:
             st.session_state["reward_demo_playground_run"] = cached_controlled_demo_run(
                 st,
                 cache_name="controlled_reward_demo_cache",
-                features=DEFAULT_OBSERVATION_FEATURES,
+                # The agent only observes the two velocities, so it must learn
+                # entirely from the reward you designed.
+                features=("cart_velocity", "pole_angular_velocity"),
                 action_forces=ACTION_PRESETS["Standard left/right"],
                 seed=21,
                 reward_weights=reward_for_run,

@@ -1585,7 +1585,27 @@ def request_streamlit_rerun(st: Any) -> None:
 
 def set_app_stage(st: Any, stage: str) -> None:
     st.session_state["app_stage"] = stage
+    st.session_state["scroll_to_top_pending"] = True
     request_streamlit_rerun(st)
+
+
+def scroll_to_top_if_requested(st: Any) -> None:
+    if not st.session_state.pop("scroll_to_top_pending", False):
+        return
+    st.html(
+        """
+        <script>
+        function scrollToTop() {
+          window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        }
+        setTimeout(scrollToTop, 30);
+        setTimeout(scrollToTop, 180);
+        </script>
+        """,
+        unsafe_allow_javascript=True,
+    )
 
 
 def render_intro_page(st: Any) -> None:
@@ -2000,7 +2020,9 @@ def render_observation_slideshow_page(st: Any) -> None:
             "group": "Pole",
         },
     ]
-    st.session_state.setdefault("observation_demo_builder_features", list(DEFAULT_OBSERVATION_FEATURES))
+    if st.session_state.get("observation_demo_builder_version") != "empty-v2":
+        st.session_state["observation_demo_builder_features"] = []
+        st.session_state["observation_demo_builder_version"] = "empty-v2"
     selected_features = list(st.session_state["observation_demo_builder_features"])
     playground_columns = st.columns([1, 1])
     with playground_columns[0]:
@@ -2011,7 +2033,7 @@ def render_observation_slideshow_page(st: Any) -> None:
             value=selected_features,
             key="observation_demo_drag_canvas",
             height=330,
-            reset_id="observation-demo",
+            reset_id="observation-demo-empty-v2",
         )
         if isinstance(component_value, list):
             selected_features = [
@@ -2019,10 +2041,15 @@ def render_observation_slideshow_page(st: Any) -> None:
                 for feature in component_value
                 if str(feature) in OBSERVATION_LABELS
             ]
-            if not selected_features:
-                selected_features = ["pole_angle"]
             st.session_state["observation_demo_builder_features"] = selected_features
-        train_observation_demo = st.button("Train with these observations", type="primary", use_container_width=True)
+        train_observation_demo = st.button(
+            "Train with these observations",
+            type="primary",
+            use_container_width=True,
+            disabled=not selected_features,
+        )
+        if not selected_features:
+            st.caption("Drag at least one observation into the box before training.")
 
     with playground_columns[1]:
         if train_observation_demo:
@@ -2907,10 +2934,9 @@ def render_action_slideshow_page(st: Any) -> None:
     )
     playground_columns = st.columns([1, 1])
     with playground_columns[0]:
-        st.session_state.setdefault(
-            "action_demo_builder_items",
-            action_forces_to_builder_items(ACTION_PRESETS["Standard left/right"]),
-        )
+        if st.session_state.get("action_demo_builder_version") != "empty-v2":
+            st.session_state["action_demo_builder_items"] = []
+            st.session_state["action_demo_builder_version"] = "empty-v2"
         component_value = drag_canvas_component(
             mode="action",
             title="Agent actions",
@@ -2918,17 +2944,25 @@ def render_action_slideshow_page(st: Any) -> None:
             value=list(st.session_state["action_demo_builder_items"]),
             key="action_demo_drag_canvas",
             height=330,
-            reset_id="action-demo-builder",
+            reset_id="action-demo-builder-empty-v2",
         )
         if isinstance(component_value, list):
             st.session_state["action_demo_builder_items"] = component_value
-        action_forces = normalize_action_builder_items(st.session_state["action_demo_builder_items"])
-        forces = ", ".join(f"{force:g}" for force in action_forces)
-        st.markdown(
-            f'<div class="action-slide-forces"><strong>Selected force choices:</strong> {forces}</div>',
-            unsafe_allow_html=True,
+        action_forces = normalize_optional_action_builder_items(st.session_state["action_demo_builder_items"])
+        if action_forces:
+            forces = ", ".join(f"{force:g}" for force in action_forces)
+            st.markdown(
+                f'<div class="action-slide-forces"><strong>Selected force choices:</strong> {forces}</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption("Drag at least one force bubble into the box before training.")
+        train_action_demo = st.button(
+            "Train with these actions",
+            type="primary",
+            use_container_width=True,
+            disabled=not action_forces,
         )
-        train_action_demo = st.button("Train with these actions", type="primary", use_container_width=True)
 
     with playground_columns[1]:
         if train_action_demo:
@@ -3429,6 +3463,22 @@ def normalize_action_builder_items(items: Any) -> tuple[float, ...]:
     if len(unique_sorted) < 2:
         return ACTION_PRESETS["Standard left/right"]
     return unique_sorted
+
+
+def normalize_optional_action_builder_items(items: Any) -> tuple[float, ...]:
+    if not isinstance(items, list):
+        return ()
+
+    forces: list[float] = []
+    for item in items:
+        value = item.get("force") if isinstance(item, dict) else item
+        try:
+            force = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(force) and abs(force) <= 30.0:
+            forces.append(force)
+    return tuple(sorted(set(forces)))
 
 
 def action_forces_to_builder_items(action_forces: tuple[float, ...]) -> list[dict[str, float]]:
@@ -4509,6 +4559,7 @@ def run_streamlit_app() -> None:
         initial_sidebar_state="expanded" if lab_stage else "collapsed",
     )
     set_sidebar_default_for_stage(st, expanded=lab_stage)
+    scroll_to_top_if_requested(st)
     render_instructor_controls(st)
 
     if stage == "intro":

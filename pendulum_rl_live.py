@@ -2884,6 +2884,9 @@ def render_reward_slideshow_page(st: Any) -> None:
     if train_reward_demo:
         st.session_state.pop("reward_demo_train_requested", None)
         reward_for_run = {"reward_terms": demo_reward_terms, "reward_tokens": reward_tokens}
+        # Vary the seed each Train so results are not anchored to one run of a
+        # single fixed seed.
+        run_seed = random.randint(1, 999_999)
         with st.spinner("Training a Q-learning agent with your reward..."):
             st.session_state["reward_demo_playground_run"] = cached_controlled_demo_run(
                 st,
@@ -2892,7 +2895,7 @@ def render_reward_slideshow_page(st: Any) -> None:
                 # entirely from the reward you designed.
                 features=("cart_velocity", "pole_angular_velocity"),
                 action_forces=ACTION_PRESETS["Standard left/right"],
-                seed=21,
+                seed=run_seed,
                 reward_weights=reward_for_run,
             )
         request_streamlit_rerun(st)

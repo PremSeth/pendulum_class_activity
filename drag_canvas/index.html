@@ -434,11 +434,18 @@
 
     function sendValue() {
       persistValue();
-      streamlitMessage("streamlit:setComponentValue", {
-        value: state.value,
-        dataType: "json",
+      // Lock the frame height to the freshly rendered canvas height *before*
+      // Streamlit reruns, so the iframe never collapses/expands mid-rerun
+      // (which is what made the page flicker on the first drop). Defer the
+      // value commit one frame so the populated canvas is already painted.
+      setHeight();
+      requestAnimationFrame(() => {
+        streamlitMessage("streamlit:setComponentValue", {
+          value: state.value,
+          dataType: "json",
+        });
+        setHeight();
       });
-      requestAnimationFrame(setHeight);
     }
 
     function labelFor(id) {

@@ -4570,6 +4570,35 @@ def mission_check_result(
     return False, f"Only {steps} steps. Mission 3 success requires at least 100 balanced steps with the animal observation.", metrics
 
 
+def inject_dark_mode_text_styles(st: Any) -> None:
+    """In dark mode, force page-background body text to white so it pops."""
+    st.markdown(
+        """
+        <style>
+        @media (prefers-color-scheme: dark) {
+            .observation-slide-lead,
+            .observation-slide-note,
+            .observation-slide-features,
+            .reward-slide-lead,
+            .reward-slide-note,
+            .action-slide-lead,
+            .action-slide-note,
+            .action-slide-forces,
+            .algo-lead,
+            .algo-note,
+            .mission-title,
+            .mission-task,
+            .mission-unlock,
+            .mission-step {
+                color: #ffffff !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def run_streamlit_app() -> None:
     modules = require_dependencies("streamlit", "numpy", "pandas", "matplotlib.pyplot", "gymnasium", "torch")
     st = modules["streamlit"]
@@ -4582,6 +4611,7 @@ def run_streamlit_app() -> None:
         layout="wide",
         initial_sidebar_state="expanded" if lab_stage else "collapsed",
     )
+    inject_dark_mode_text_styles(st)
     set_sidebar_default_for_stage(st, expanded=lab_stage)
     scroll_to_top_if_requested(st)
     render_instructor_controls(st)

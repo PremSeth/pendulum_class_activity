@@ -1921,13 +1921,14 @@ def render_pendulum_intro_page(st: Any) -> None:
         """
         <div class="pendulum-intro-lead">
             This is the world the agent lives in: a cart on a track with a pole
-            balanced on top. Drag the cart or grab the pole and move it around.
+            balanced on top.
         </div>
         <div class="pendulum-intro-note">
-            The agent never sees the picture &mdash; it only sees the four numbers on
-            the right. Every value is mapped to the same &minus;&pi; … &pi; scale so
-            you can compare them. Play with it until the numbers make sense, then
-            continue to learn how observations shape what the agent can do.
+            <strong>Use the ← and → arrow keys to push the cart. Drag the pole with
+            your mouse to swing it.</strong> The agent never sees the picture &mdash;
+            it only sees the four numbers on the right, all mapped to the same
+            &minus;&pi; … &pi; scale. Notice how pushing the cart also tips the pole.
+            Play until the numbers make sense, then continue.
         </div>
         """,
         unsafe_allow_html=True,

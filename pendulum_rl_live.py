@@ -4652,7 +4652,13 @@ def run_streamlit_app() -> None:
 
     render_tutorial_anchor(st, "train")
     render_tutorial_callout(st, "train")
-    train_button = st.button("Train agent", type="primary")
+    # Latch the click in session state so the training intent survives any
+    # extra rerun a component may trigger right after the click (which would
+    # otherwise consume the transient st.button() return and make the first
+    # click appear to do nothing).
+    if st.button("Train agent", type="primary"):
+        st.session_state["train_requested"] = True
+    train_button = st.session_state.pop("train_requested", False)
     if train_button and not observation_features:
         st.warning(
             "Your observation box is empty, so the agent can't see anything and "

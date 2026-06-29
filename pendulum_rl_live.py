@@ -3564,6 +3564,15 @@ def behavior_controls(
     render_tutorial_anchor(st, "observation_action")
     st.subheader("Observation and action lab")
     render_tutorial_callout(st, "observation_action")
+
+    # Start the observation and action builders empty for each new mission so
+    # students choose them from scratch rather than inheriting the previous
+    # mission's selection.
+    current_mission = active_mission(st)
+    if st.session_state.get("behavior_builder_mission") != current_mission:
+        st.session_state["behavior_builder_mission"] = current_mission
+        st.session_state["observation_builder_features"] = []
+        st.session_state["action_builder_items"] = []
     if show_start_controls:
         obs_column, action_column, start_column = st.columns(3)
     else:
@@ -3608,8 +3617,9 @@ def behavior_controls(
             st.session_state["observation_builder_features"] = selected_features
 
         if not selected_features:
+            # Keep the box visually empty but fall back to a valid observation
+            # locally so training still has something to learn from.
             selected_features = ["pole_angle"]
-            st.session_state["observation_builder_features"] = selected_features
 
         with st.expander("What the observation options mean", expanded=tutorial_enabled(st)):
             for feature in observation_pool:
@@ -4570,62 +4580,6 @@ def mission_check_result(
     return False, f"Only {steps} steps. Mission 3 success requires at least 100 balanced steps with the animal observation.", metrics
 
 
-def inject_dark_mode_text_styles(st: Any) -> None:
-    """In dark mode, force page-background body text to white so it pops.
-
-    Text that sits on the app's dark background is lightened. Elements that
-    carry their own light background (cards, chips, tables) keep that light
-    background and dark text so they stay readable.
-    """
-    st.markdown(
-        """
-        <style>
-        @media (prefers-color-scheme: dark) {
-            /* Page-background text -> white so it pops against the dark theme. */
-            .observation-slide-lead,
-            .observation-slide-note,
-            .observation-slide-features,
-            .reward-slide-lead,
-            .reward-slide-note,
-            .reward-pos,
-            .reward-neg,
-            .action-slide-lead,
-            .action-slide-note,
-            .action-slide-forces,
-            .algo-lead,
-            .algo-note,
-            .net-arrow,
-            .net-label,
-            .snippet-arrow {
-                color: #ffffff !important;
-            }
-
-            /* Cards/tables/chips/banners keep their light surface, so their
-               own (dark or accent) text stays readable. Re-assert a light
-               background in case the dark theme strips it. */
-            .lab-snippet,
-            .lab-snippet-panel,
-            .lab-chip,
-            .reward-teach-card,
-            .reward-compare-cell,
-            .reward-table,
-            .reward-table th,
-            .reward-table td,
-            .algo-card,
-            .lab-action-card,
-            .bonus-pick,
-            .mission-banner {
-                background: #ffffff !important;
-            }
-            .mission-banner { background: #f5faff !important; }
-            .mission-banner.bonus { background: #f6f4ff !important; }
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def run_streamlit_app() -> None:
     modules = require_dependencies("streamlit", "numpy", "pandas", "matplotlib.pyplot", "gymnasium", "torch")
     st = modules["streamlit"]
@@ -4638,7 +4592,6 @@ def run_streamlit_app() -> None:
         layout="wide",
         initial_sidebar_state="expanded" if lab_stage else "collapsed",
     )
-    inject_dark_mode_text_styles(st)
     set_sidebar_default_for_stage(st, expanded=lab_stage)
     scroll_to_top_if_requested(st)
     render_instructor_controls(st)

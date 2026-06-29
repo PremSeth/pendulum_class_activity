@@ -3606,7 +3606,7 @@ def behavior_controls(
             value=selected_features,
             key="observation_drag_canvas",
             height=390,
-            reset_id=f"ethical:{st.session_state.get('ethical_exploration_enabled', False)}",
+            reset_id=f"{current_mission}:ethical:{st.session_state.get('ethical_exploration_enabled', False)}",
         )
         if isinstance(component_value, list):
             selected_features = [
@@ -3640,7 +3640,7 @@ def behavior_controls(
             value=list(st.session_state["action_builder_items"]),
             key="action_drag_canvas",
             height=390,
-            reset_id="action-builder-v1",
+            reset_id=f"action-builder-v1:{current_mission}",
         )
         if isinstance(component_value, list):
             st.session_state["action_builder_items"] = component_value

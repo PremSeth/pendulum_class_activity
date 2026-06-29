@@ -3404,7 +3404,6 @@ def reward_controls(st: Any) -> dict[str, Any]:
             "pole_angle",
             "pole_angular_velocity",
         ],
-        "Angle helpers": ["sin_theta", "cos_theta"],
         "Action": ["action_force"],
     }
     if st.session_state.get("ethical_exploration_enabled", False):

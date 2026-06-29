@@ -3312,9 +3312,12 @@ def render_action_slideshow_page(st: Any) -> None:
         render_guided_prompt(
             st,
             step_label="Nice work",
-            title="You have seen how the action menu shapes behavior.",
-            body="Tiny menus are easy but coarse; a rest option allows stillness; huge forces"
-            " overshoot. Continue to design the <strong>reward function</strong>.",
+            title="The actions you allow set the limits of what the agent can do.",
+            body="The agent can only ever pick from the forces you give it. If you never offer"
+            " a 0, it can never choose to stop pushing; if its only options are huge forces, it"
+            " can never make a gentle correction. The action menu defines the agent's whole"
+            " range of behavior &mdash; before it learns anything, you have already decided what"
+            " is possible. Continue to design the <strong>reward function</strong>.",
             tone="success",
         )
 

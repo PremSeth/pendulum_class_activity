@@ -2777,6 +2777,87 @@ def render_reward_slideshow_page(st: Any) -> None:
         unsafe_allow_html=True,
     )
 
+    st.markdown(GUIDED_PROMPT_STYLE, unsafe_allow_html=True)
+    st.subheader("Your turn: design a reward function")
+    render_guided_prompt(
+        st,
+        step_label="Try it",
+        title="Build a reward that penalizes the cart drifting AND the pole leaning.",
+        body="Make a reward function that <strong>punishes how far the cart is from the center"
+        " and how far the pole is from upright</strong>. Drag in <strong>cart position</strong>"
+        " and <strong>pole angle</strong>, and shape them so a bigger drift or a bigger lean"
+        " gives a worse reward."
+        "<br><br><strong>Hint:</strong> use <strong>absolute value</strong> (so left and right"
+        " count the same), and think about what <strong>sign</strong> belongs in front &mdash;"
+        " should drifting away make the reward go up, or down?",
+    )
+
+    reward_pool = [
+        {
+            "id": signal,
+            "label": REWARD_SIGNAL_LABELS[signal],
+            "group": group,
+            "scales": REWARD_SCALE_LABELS if signal in REWARD_SCALE_SIGNALS else {},
+            "default_scale": default_reward_scale(signal),
+        }
+        for group, signals in {
+            "Episode": ["alive", "fell"],
+            "Cart state": ["cart_position", "cart_velocity"],
+            "Pole state": ["pole_angle", "pole_angular_velocity"],
+        }.items()
+        for signal in signals
+    ]
+    st.session_state.setdefault("reward_demo_builder_terms", [])
+    component_value = drag_canvas_component(
+        mode="reward",
+        title="Reward function",
+        pool=reward_pool,
+        value=list(st.session_state["reward_demo_builder_terms"]),
+        key="reward_demo_drag_canvas",
+        height=520,
+        reset_id="reward-demo-builder",
+    )
+    if isinstance(component_value, list):
+        st.session_state["reward_demo_builder_terms"] = component_value
+
+    reward_tokens, demo_reward_terms = normalize_reward_builder_items(
+        list(st.session_state["reward_demo_builder_terms"])
+    )
+    signals_used = {str(term.get("signal", "")) for term in demo_reward_terms}
+    has_cart = "cart_position" in signals_used
+    has_angle = "pole_angle" in signals_used
+
+    # Check the behavior of the reward they actually built, not its structure:
+    # does drifting off-center and leaning over each LOWER the reward?
+    weights = {"reward_terms": demo_reward_terms, "reward_tokens": reward_tokens}
+
+    def demo_reward(state: tuple[float, float, float, float]) -> float:
+        return reward_function((0, 0, 0, 0), 0, 0.0, state, 1.0, False, False, weights)
+
+    centered = demo_reward((0.0, 0.0, 0.0, 0.0))
+    drifted = demo_reward((1.6, 0.0, 0.0, 0.0))        # cart far from center
+    leaning = demo_reward((0.0, 0.0, 0.7, 0.0))         # pole tilted over
+    drift_left = demo_reward((-1.6, 0.0, 0.0, 0.0))     # opposite side, same penalty?
+    lean_left = demo_reward((0.0, 0.0, -0.7, 0.0))
+
+    penalizes_drift = drifted < centered - 1e-6 and abs(drift_left - drifted) < 1e-6
+    penalizes_lean = leaning < centered - 1e-6 and abs(lean_left - leaning) < 1e-6
+
+    if has_cart and has_angle and penalizes_drift and penalizes_lean:
+        st.success(
+            "Nice — both drifting off-center and leaning over lower the reward, and left and"
+            " right are penalized equally. That is exactly a reward for staying centered and"
+            " upright."
+        )
+    elif has_cart and has_angle:
+        st.info(
+            "You have cart position and pole angle in there. Now make drifting and leaning each"
+            " **lower** the reward equally on both sides — wrap each in absolute value and put a"
+            " negative sign in front."
+        )
+    else:
+        st.caption("Drag in cart position and pole angle to build the reward described above.")
+
     st.markdown(
         """
         <div class="reward-slide-lead">

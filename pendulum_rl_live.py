@@ -3110,7 +3110,7 @@ def sidebar_settings(st: Any, forced_algorithm: str | None = None) -> TrainSetti
     shared_hosting = is_network_url_session(st)
     cpu_env_cap = max(1, cpu_count - 4)
     if shared_hosting:
-        cpu_env_cap = min(cpu_env_cap, 2)
+        cpu_env_cap = 1
     dqn_parallel_options = [option for option in (1, 2, 4, 8, 12, 16) if option <= cpu_env_cap]
     if not dqn_parallel_options:
         dqn_parallel_options = [1]
@@ -3121,13 +3121,13 @@ def sidebar_settings(st: Any, forced_algorithm: str | None = None) -> TrainSetti
         hidden_size = 64
     else:
         learning_rate = learning_rate * 0.01
-        batch_size = 32
-        hidden_size = 32
+        batch_size = 16 if shared_hosting else 32
+        hidden_size = 16 if shared_hosting else 32
         target_update = 5
-        update_every = 4
+        update_every = 8 if shared_hosting else 4
         parallel_envs = default_dqn_parallel_envs
         if shared_hosting:
-            st.sidebar.info("Network URL mode: DQN is capped to low CPU parallelism so several people can train at once.")
+            st.sidebar.info("Shared/Cloud mode: DQN uses 1 CPU env, smaller batches, fewer updates, and a smaller network.")
 
     with st.sidebar.expander("Advanced"):
         max_steps = int(st.slider("Max steps", 50, 500, max_steps, 25))
@@ -3142,9 +3142,12 @@ def sidebar_settings(st: Any, forced_algorithm: str | None = None) -> TrainSetti
             )
         )
         if algorithm == "DQN":
-            batch_size = int(st.select_slider("DQN batch size", [16, 32, 64, 128], batch_size))
-            hidden_size = int(st.select_slider("DQN hidden units", [16, 32, 64, 128], hidden_size))
-            update_every = int(st.select_slider("DQN update every N steps", [1, 2, 4, 8], update_every))
+            batch_size_options = [16, 32] if shared_hosting else [16, 32, 64, 128]
+            hidden_size_options = [16, 32] if shared_hosting else [16, 32, 64, 128]
+            update_every_options = [4, 8] if shared_hosting else [1, 2, 4, 8]
+            batch_size = int(st.select_slider("DQN batch size", batch_size_options, batch_size))
+            hidden_size = int(st.select_slider("DQN hidden units", hidden_size_options, hidden_size))
+            update_every = int(st.select_slider("DQN update every N steps", update_every_options, update_every))
             target_update = int(st.select_slider("DQN target update episodes", [2, 5, 10, 20], target_update))
             parallel_envs = int(
                 st.select_slider(

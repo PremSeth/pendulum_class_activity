@@ -3126,8 +3126,6 @@ def sidebar_settings(st: Any, forced_algorithm: str | None = None) -> TrainSetti
         target_update = 5
         update_every = 10 if shared_hosting else 4
         parallel_envs = default_dqn_parallel_envs
-        if shared_hosting:
-            st.sidebar.info("Shared/Cloud mode: DQN uses 1 CPU env, 120 episodes, 200 max steps, smaller batches, fewer updates, and a smaller network.")
 
     with st.sidebar.expander("Advanced"):
         max_steps = int(st.slider("Max steps", 50, 500, max_steps, 25))

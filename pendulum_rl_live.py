@@ -954,7 +954,7 @@ def train_q_learning(
 
 
 class ReplayBuffer:
-    def __init__(self, capacity: int = 10_000) -> None:
+    def __init__(self, capacity: int = 2_000) -> None:
         self.items: deque[tuple[Any, int, float, Any, bool]] = deque(maxlen=capacity)
 
     def add(self, obs: Any, action: int, reward: float, next_obs: Any, done: bool) -> None:
@@ -3063,7 +3063,9 @@ def sidebar_settings(st: Any, forced_algorithm: str | None = None) -> TrainSetti
             ["Q-learning", "DQN"],
             help="Q-learning stores action values in a table. DQN uses a small neural network to predict action values.",
         )
-    default_episodes = 120 if algorithm == "Q-learning" else 300
+    cpu_count = os.cpu_count() or 1
+    shared_hosting = is_network_url_session(st)
+    default_episodes = 120 if algorithm == "Q-learning" or shared_hosting else 300
     max_episodes = 500 if algorithm == "Q-learning" else 3_000
     episode_step = 20 if algorithm == "Q-learning" else 50
     episodes = int(
@@ -3098,7 +3100,7 @@ def sidebar_settings(st: Any, forced_algorithm: str | None = None) -> TrainSetti
     )
     render_tutorial_callout(st, "training", st.sidebar)
 
-    max_steps = 300
+    max_steps = 200 if algorithm == "DQN" and shared_hosting else 300
     gamma = 0.99
     epsilon_min = 0.05
     seed = 7
@@ -3106,8 +3108,6 @@ def sidebar_settings(st: Any, forced_algorithm: str | None = None) -> TrainSetti
     target_update = 10
     update_every = 1
     parallel_envs = 1
-    cpu_count = os.cpu_count() or 1
-    shared_hosting = is_network_url_session(st)
     cpu_env_cap = max(1, cpu_count - 4)
     if shared_hosting:
         cpu_env_cap = 1
@@ -3124,10 +3124,10 @@ def sidebar_settings(st: Any, forced_algorithm: str | None = None) -> TrainSetti
         batch_size = 16 if shared_hosting else 32
         hidden_size = 16 if shared_hosting else 32
         target_update = 5
-        update_every = 8 if shared_hosting else 4
+        update_every = 10 if shared_hosting else 4
         parallel_envs = default_dqn_parallel_envs
         if shared_hosting:
-            st.sidebar.info("Shared/Cloud mode: DQN uses 1 CPU env, smaller batches, fewer updates, and a smaller network.")
+            st.sidebar.info("Shared/Cloud mode: DQN uses 1 CPU env, 120 episodes, 200 max steps, smaller batches, fewer updates, and a smaller network.")
 
     with st.sidebar.expander("Advanced"):
         max_steps = int(st.slider("Max steps", 50, 500, max_steps, 25))
@@ -3144,7 +3144,7 @@ def sidebar_settings(st: Any, forced_algorithm: str | None = None) -> TrainSetti
         if algorithm == "DQN":
             batch_size_options = [16, 32] if shared_hosting else [16, 32, 64, 128]
             hidden_size_options = [16, 32] if shared_hosting else [16, 32, 64, 128]
-            update_every_options = [4, 8] if shared_hosting else [1, 2, 4, 8]
+            update_every_options = [8, 10, 12] if shared_hosting else [1, 2, 4, 8]
             batch_size = int(st.select_slider("DQN batch size", batch_size_options, batch_size))
             hidden_size = int(st.select_slider("DQN hidden units", hidden_size_options, hidden_size))
             update_every = int(st.select_slider("DQN update every N steps", update_every_options, update_every))

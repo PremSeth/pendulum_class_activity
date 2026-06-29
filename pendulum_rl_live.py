@@ -2247,27 +2247,39 @@ def render_observation_slideshow_page(st: Any) -> None:
                 selected_features = incoming_features
                 st.session_state["observation_demo_builder_features"] = selected_features
                 st.session_state["observation_demo_builder_touched"] = True
-        train_observation_demo = st.button(
+        if st.button(
             "Train with these observations",
             type="primary",
             use_container_width=True,
             disabled=not selected_features,
-        )
+        ):
+            st.session_state["observation_demo_train_requested"] = True
         if not selected_features:
             st.caption("Drag at least one observation into the box before training.")
 
     with playground_columns[1]:
+        # Train on the features currently in the box. The latch lets the click
+        # survive the extra rerun the drag component triggers, so we always
+        # train on the up-to-date selection instead of a stale one. Only consume
+        # the latch once the box has features, so a momentarily empty settle
+        # frame does not swallow the request.
+        train_observation_demo = (
+            bool(st.session_state.get("observation_demo_train_requested", False))
+            and bool(selected_features)
+        )
         if train_observation_demo:
+            st.session_state.pop("observation_demo_train_requested", None)
+            features_for_run = tuple(selected_features)
             with st.spinner("Training controlled observation demo..."):
                 run_result = cached_controlled_demo_run(
                     st,
                     cache_name="controlled_observation_demo_cache",
-                    features=tuple(selected_features),
+                    features=features_for_run,
                     action_forces=ACTION_PRESETS["Standard left/right"],
                     seed=21,
                 )
             st.session_state["observation_demo_playground_run"] = run_result
-            runs_done[frozenset(selected_features)] = float(run_result.get("score", 0.0))
+            runs_done[frozenset(features_for_run)] = float(run_result.get("score", 0.0))
         run = st.session_state.get("observation_demo_playground_run")
         selected_feature_tuple = tuple(selected_features)
         if (
@@ -3237,25 +3249,35 @@ def render_action_slideshow_page(st: Any) -> None:
             )
         else:
             st.caption("Drag at least one force bubble into the box before training.")
-        train_action_demo = st.button(
+        if st.button(
             "Train with these actions",
             type="primary",
             use_container_width=True,
             disabled=not action_forces,
-        )
+        ):
+            st.session_state["action_demo_train_requested"] = True
 
     with playground_columns[1]:
+        # Latch so the click survives the drag component's extra rerun. Only
+        # consume it once there is a force menu to train on, so a momentarily
+        # empty box on a settle frame does not swallow the request.
+        train_action_demo = (
+            bool(st.session_state.get("action_demo_train_requested", False))
+            and bool(action_forces)
+        )
         if train_action_demo:
+            st.session_state.pop("action_demo_train_requested", None)
+            forces_for_run = tuple(action_forces)
             with st.spinner("Training controlled action demo..."):
                 run_result = cached_controlled_demo_run(
                     st,
                     cache_name="controlled_action_demo_cache",
                     features=DEFAULT_OBSERVATION_FEATURES,
-                    action_forces=action_forces,
-                    seed=seed_for_action_demo(action_forces),
+                    action_forces=forces_for_run,
+                    seed=seed_for_action_demo(forces_for_run),
                 )
             st.session_state["action_demo_playground_run"] = run_result
-            menu_key = tuple(round(float(force), 3) for force in action_forces)
+            menu_key = tuple(round(float(force), 3) for force in forces_for_run)
             action_runs[menu_key] = float(run_result.get("score", 0.0))
         run = st.session_state.get("action_demo_playground_run")
         selected_action_tuple = tuple(action_forces)

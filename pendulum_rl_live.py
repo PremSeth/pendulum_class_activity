@@ -4430,6 +4430,9 @@ def render_mission_check(
     st.divider()
     st.subheader("Mission check")
 
+    if mission_id == "mission_1":
+        st.info("Hint: if your model does not seem to converge well, try increasing your training episodes.")
+
     if mission_id == "mission_3":
         with st.expander("Need a hint?"):
             st.markdown(

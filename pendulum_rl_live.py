@@ -414,6 +414,15 @@ OBSERVATION_DEMO_REWARD_WEIGHTS: dict[str, Any] = {
 }
 
 
+# Reward used by the interactive observation/action playground demos: keep it as
+# simple as the lab default so students see the same -1 * fell signal at work.
+CONTROLLED_DEMO_REWARD_WEIGHTS: dict[str, Any] = {
+    "reward_terms": [
+        {"signal": "fell", "factor": -1.0, "scale": "unit"},
+    ],
+}
+
+
 REWARD_DEMO_WEIGHTS: dict[str, dict[str, Any]] = {
     # Reliable upright balance: reward standing straight, punish falling.
     "balance": {
@@ -442,8 +451,8 @@ REWARD_DEMO_WEIGHTS: dict[str, dict[str, Any]] = {
 }
 
 
-CONTROLLED_DEMO_VERSION = "controlled-demo-v4-matched"
-DEMO_EPISODES = 400
+CONTROLLED_DEMO_VERSION = "controlled-demo-v5-fell"
+DEMO_EPISODES = 500
 # The reward demos need to converge enough to show the cos-vs-sin difference, so
 # they train longer than the snappy observation/action demos.
 REWARD_DEMO_EPISODES = 800
@@ -1860,7 +1869,7 @@ def build_controlled_demo_run(
         # demos so students see a consistent starting state, not a random tilt.
         initial_state=(0.0, 0.0, 0.0, 0.0),
     )
-    result = train_q_learning(settings, OBSERVATION_DEMO_REWARD_WEIGHTS, label="Demo")
+    result = train_q_learning(settings, CONTROLLED_DEMO_REWARD_WEIGHTS, label="Demo")
     _, env_score, _, frames = evaluate_policy(
         result,
         seed=seed + 200,
@@ -1893,6 +1902,60 @@ def cached_controlled_demo_run(
             seed=seed,
         )
     return dict(cache[key])
+
+
+ALL_OBSERVATION_FEATURES: tuple[str, ...] = (
+    "cart_position",
+    "cart_velocity",
+    "pole_angle",
+    "pole_angular_velocity",
+)
+
+
+def render_guided_prompt(
+    st: Any,
+    *,
+    step_label: str,
+    title: str,
+    body: str,
+    tone: str = "info",
+) -> None:
+    """Mission-style coaching card used on the observation/action demo pages."""
+    st.markdown(
+        f"""
+        <div class="guided-prompt guided-prompt-{tone}">
+            <div class="guided-step">{step_label}</div>
+            <div class="guided-title">{title}</div>
+            <div class="guided-body">{body}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+GUIDED_PROMPT_STYLE = """
+<style>
+.guided-prompt {
+    border: 1px solid #d0d5dd;
+    border-left: 6px solid #2e90fa;
+    border-radius: 10px;
+    padding: 0.9rem 1.2rem;
+    margin: 0.4rem 0 1rem;
+    background: #f5faff;
+}
+.guided-prompt-success { border-left-color: #12b76a; background: #f0fdf4; }
+.guided-prompt-warn { border-left-color: #f79009; background: #fffaf0; }
+.guided-step {
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #1570cd;
+}
+.guided-title { font-size: 1.25rem; font-weight: 800; color: #101828; margin: 0.15rem 0 0.35rem; }
+.guided-body { font-size: 1.05rem; line-height: 1.5; color: #344054; }
+</style>
+"""
 
 
 def render_pendulum_intro_page(st: Any) -> None:
@@ -2086,11 +2149,15 @@ def render_observation_slideshow_page(st: Any) -> None:
         unsafe_allow_html=True,
     )
 
-    st.subheader("Try changing observations")
+    st.markdown(GUIDED_PROMPT_STYLE, unsafe_allow_html=True)
+    st.subheader("Experiment: what does the agent need to see?")
     st.markdown(
-        '<div class="observation-slide-note">Use the same fixed Q-learning setup and predesigned reward. Only change what the agent can see.</div>',
+        '<div class="observation-slide-note">Same fixed Q-learning setup and the same reward'
+        ' (<strong>&minus;1 &times; fell</strong>). The only thing you change is what the agent'
+        ' can observe.</div>',
         unsafe_allow_html=True,
     )
+
     observation_pool = [
         {"id": "cart_position", "label": OBSERVATION_LABELS["cart_position"], "group": "Cart"},
         {"id": "cart_velocity", "label": OBSERVATION_LABELS["cart_velocity"], "group": "Cart"},
@@ -2105,6 +2172,56 @@ def render_observation_slideshow_page(st: Any) -> None:
         st.session_state["observation_demo_builder_features"] = []
         st.session_state["observation_demo_builder_touched"] = False
         st.session_state["observation_demo_builder_version"] = "empty-v3"
+
+    # Track every observation combination the student has actually trained.
+    runs_done: dict[frozenset[str], float] = st.session_state.setdefault(
+        "observation_demo_runs_done", {}
+    )
+    trained_full = frozenset(ALL_OBSERVATION_FEATURES) in runs_done
+    trained_without_angle = any(
+        "pole_angle" not in combo and combo for combo in runs_done
+    )
+    trained_free = trained_full and trained_without_angle and len(runs_done) >= 3
+
+    # Decide which guided step the student is on.
+    if not trained_full:
+        render_guided_prompt(
+            st,
+            step_label="Step 1 of 3 · Give it everything",
+            title="Drag in all four observations, then train.",
+            body="Let the agent see cart position, cart velocity, pole angle, and pole spin."
+            " <strong>Predict first:</strong> with full information, can it keep the pole up?"
+            " Then press Train and watch.",
+        )
+    elif not trained_without_angle:
+        render_guided_prompt(
+            st,
+            step_label="Step 2 of 3 · Take away an eye",
+            title="Now remove pole angle and train again.",
+            body="Drag <strong>pole angle</strong> back out so the agent can no longer see which"
+            " way the pole is leaning. <strong>Predict first:</strong> will it still balance, or"
+            " fall? Then train and compare.",
+            tone="warn",
+        )
+    elif not trained_free:
+        render_guided_prompt(
+            st,
+            step_label="Step 3 of 3 · Your own experiment",
+            title="Try a different combination of your choosing.",
+            body="Pick any mix you are curious about &mdash; maybe pole angle but no spin, or just"
+            " the cart. <strong>Say out loud how you think it will behave</strong>, then train and"
+            " see if your prediction was right.",
+        )
+    else:
+        render_guided_prompt(
+            st,
+            step_label="Nice work",
+            title="You have seen how observations shape behavior.",
+            body="Fewer or worse observations usually means the agent acts on incomplete"
+            " information. Continue to learn about <strong>actions</strong>.",
+            tone="success",
+        )
+
     selected_features = list(st.session_state["observation_demo_builder_features"])
     playground_columns = st.columns([1, 1])
     with playground_columns[0]:
@@ -2139,13 +2256,15 @@ def render_observation_slideshow_page(st: Any) -> None:
     with playground_columns[1]:
         if train_observation_demo:
             with st.spinner("Training controlled observation demo..."):
-                st.session_state["observation_demo_playground_run"] = cached_controlled_demo_run(
+                run_result = cached_controlled_demo_run(
                     st,
                     cache_name="controlled_observation_demo_cache",
                     features=tuple(selected_features),
                     action_forces=ACTION_PRESETS["Standard left/right"],
                     seed=21,
                 )
+            st.session_state["observation_demo_playground_run"] = run_result
+            runs_done[frozenset(selected_features)] = float(run_result.get("score", 0.0))
         run = st.session_state.get("observation_demo_playground_run")
         selected_feature_tuple = tuple(selected_features)
         if (
@@ -2156,19 +2275,29 @@ def render_observation_slideshow_page(st: Any) -> None:
         ):
             shown_features = ", ".join(OBSERVATION_LABELS[feature] for feature in run["features"])
             st.markdown(
-                f'<div class="observation-slide-features"><strong>Agent sees:</strong> {shown_features}</div>',
+                f'<div class="observation-slide-features"><strong>Agent sees:</strong> {shown_features}'
+                f'<br><strong>Balanced for:</strong> {int(round(float(run.get("score", 0.0))))} steps'
+                f' (out of {DEMO_MAX_STEPS})</div>',
                 unsafe_allow_html=True,
             )
             st.image(run["gif_bytes"], width="stretch")
         else:
             st.info("Train once to see this observation choice in action.")
 
-    can_continue = isinstance(st.session_state.get("observation_demo_playground_run"), dict)
+    can_continue = trained_full and trained_without_angle and trained_free
     back_column, next_column = st.columns(2)
     if back_column.button("Back", use_container_width=True):
         set_app_stage(st, "pendulum_intro")
-    if can_continue and next_column.button("Continue", type="primary", use_container_width=True, key="observation_demo_continue"):
+    if next_column.button(
+        "Continue to actions",
+        type="primary",
+        use_container_width=True,
+        key="observation_demo_continue",
+        disabled=not can_continue,
+    ):
         set_app_stage(st, "action_demo")
+    if not can_continue:
+        st.caption("Run all three experiments above to continue.")
 
 
 def build_action_demo_run(
@@ -3012,11 +3141,71 @@ def render_action_slideshow_page(st: Any) -> None:
         unsafe_allow_html=True,
     )
 
-    st.subheader("Try changing actions")
+    st.markdown(GUIDED_PROMPT_STYLE, unsafe_allow_html=True)
+    st.subheader("Experiment: what should the agent be allowed to do?")
     st.markdown(
-        '<div class="action-slide-note">Use the same fixed Q-learning setup and predesigned reward. Only change the force choices the agent can use. Negative force pushes left, positive force pushes right, and 0 means no push.</div>',
+        '<div class="action-slide-note">Same fixed Q-learning setup, same observations, same'
+        ' reward. The only thing you change is the menu of forces the agent can pick from.'
+        ' Negative pushes left, positive pushes right, and <strong>0 means no push</strong>.</div>',
         unsafe_allow_html=True,
     )
+
+    # Track every distinct force menu the student has trained (keyed by the
+    # rounded force tuple) so we can both detect the required traits and count
+    # how many different menus they explored.
+    action_runs: dict[tuple[float, ...], float] = st.session_state.setdefault(
+        "action_demo_runs_done", {}
+    )
+    did_basic = any(sorted(menu) == [-10.0, 10.0] for menu in action_runs)
+    did_coast = any(any(abs(f) < 1e-6 for f in menu) for menu in action_runs)
+    did_large = any(any(abs(f) >= 15.0 for f in menu) for menu in action_runs)
+    did_free = len(action_runs) >= 4
+
+    if not did_basic:
+        render_guided_prompt(
+            st,
+            step_label="Step 1 of 4 · Push or push",
+            title="Drag in just −10 and +10, then train.",
+            body="The agent can only shove left or shove right &mdash; it can never sit still."
+            " <strong>Predict:</strong> how will the cart and pole look while it tries to"
+            " balance? Train and watch the jitter.",
+        )
+    elif not did_coast:
+        render_guided_prompt(
+            st,
+            step_label="Step 2 of 4 · Let it rest",
+            title="Add a 0 force (no push), then train again.",
+            body="Now the agent can choose to do nothing. <strong>Predict:</strong> with a"
+            " &lsquo;no push&rsquo; option, should it be able to stay still or coast more"
+            " smoothly? Train and compare to step 1.",
+            tone="warn",
+        )
+    elif not did_large:
+        render_guided_prompt(
+            st,
+            step_label="Step 3 of 4 · Go big",
+            title="Now try some really large forces (±15 or more).",
+            body="Give the agent powerful shoves. <strong>Predict:</strong> will big forces help"
+            " it react faster, or make it overshoot and look jerky? Train and see.",
+        )
+    elif not did_free:
+        render_guided_prompt(
+            st,
+            step_label="Step 4 of 4 · Your own menu",
+            title="Design a force menu of your own and predict the behavior.",
+            body="Mix magnitudes and a rest option however you like. <strong>Say how you expect"
+            " it to move</strong> before you train, then check yourself.",
+        )
+    else:
+        render_guided_prompt(
+            st,
+            step_label="Nice work",
+            title="You have seen how the action menu shapes behavior.",
+            body="Tiny menus are easy but coarse; a rest option allows stillness; huge forces"
+            " overshoot. Continue to design the <strong>reward function</strong>.",
+            tone="success",
+        )
+
     playground_columns = st.columns([1, 1])
     with playground_columns[0]:
         if st.session_state.get("action_demo_builder_version") != "empty-v3":
@@ -3055,13 +3244,16 @@ def render_action_slideshow_page(st: Any) -> None:
     with playground_columns[1]:
         if train_action_demo:
             with st.spinner("Training controlled action demo..."):
-                st.session_state["action_demo_playground_run"] = cached_controlled_demo_run(
+                run_result = cached_controlled_demo_run(
                     st,
                     cache_name="controlled_action_demo_cache",
                     features=DEFAULT_OBSERVATION_FEATURES,
                     action_forces=action_forces,
                     seed=seed_for_action_demo(action_forces),
                 )
+            st.session_state["action_demo_playground_run"] = run_result
+            menu_key = tuple(round(float(force), 3) for force in action_forces)
+            action_runs[menu_key] = float(run_result.get("score", 0.0))
         run = st.session_state.get("action_demo_playground_run")
         selected_action_tuple = tuple(action_forces)
         if (
@@ -3072,19 +3264,29 @@ def render_action_slideshow_page(st: Any) -> None:
         ):
             shown_forces = ", ".join(f"{force:g}" for force in run["action_forces"])
             st.markdown(
-                f'<div class="action-slide-forces"><strong>Agent actions:</strong> {shown_forces}</div>',
+                f'<div class="action-slide-forces"><strong>Agent actions:</strong> {shown_forces}'
+                f'<br><strong>Balanced for:</strong> {int(round(float(run.get("score", 0.0))))} steps'
+                f' (out of {DEMO_MAX_STEPS})</div>',
                 unsafe_allow_html=True,
             )
             st.image(run["gif_bytes"], width="stretch")
         else:
             st.info("Train once to see this action space in action.")
 
-    can_continue = isinstance(st.session_state.get("action_demo_playground_run"), dict)
+    can_continue = did_basic and did_coast and did_large and did_free
     back_column, next_column = st.columns(2)
     if back_column.button("Back", use_container_width=True):
         set_app_stage(st, "observation_demo")
-    if can_continue and next_column.button("Continue", type="primary", use_container_width=True, key="action_demo_continue"):
+    if next_column.button(
+        "Continue to reward",
+        type="primary",
+        use_container_width=True,
+        key="action_demo_continue",
+        disabled=not can_continue,
+    ):
         set_app_stage(st, "reward_demo")
+    if not can_continue:
+        st.caption("Run all four experiments above to continue.")
 
 
 def render_tutorial_choice_page(st: Any) -> None:

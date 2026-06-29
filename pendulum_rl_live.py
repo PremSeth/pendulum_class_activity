@@ -2186,6 +2186,26 @@ def render_observation_slideshow_page(st: Any) -> None:
     )
     trained_free = trained_full and trained_without_angle and len(runs_done) >= 3
 
+    # Which step is the student currently on (drives the prompt and the check).
+    if not trained_full:
+        current_step = "full"
+    elif not trained_without_angle:
+        current_step = "without_angle"
+    elif not trained_free:
+        current_step = "free"
+    else:
+        current_step = "done"
+
+    # Show the result of the last Train click: exactly what they used and
+    # whether it satisfied the step they were on.
+    feedback = st.session_state.pop("observation_demo_feedback", None)
+    if feedback:
+        tone = feedback.get("tone", "info")
+        if tone == "success":
+            st.success(feedback["text"])
+        else:
+            st.warning(feedback["text"])
+
     # Decide which guided step the student is on.
     if not trained_full:
         render_guided_prompt(
@@ -2279,7 +2299,49 @@ def render_observation_slideshow_page(st: Any) -> None:
                     seed=21,
                 )
             st.session_state["observation_demo_playground_run"] = run_result
-            runs_done[frozenset(features_for_run)] = float(run_result.get("score", 0.0))
+            feature_set = frozenset(features_for_run)
+            already_seen = feature_set in runs_done
+            runs_done[feature_set] = float(run_result.get("score", 0.0))
+
+            # Check this specific run against the step the student was on and
+            # report back exactly what happened.
+            count = len(features_for_run)
+            names = ", ".join(OBSERVATION_LABELS[f] for f in features_for_run)
+            has_angle = "pole_angle" in feature_set
+            if current_step == "full":
+                if feature_set == frozenset(ALL_OBSERVATION_FEATURES):
+                    msg = (f"✓ Step 1 complete — you trained with all 4 observations "
+                           f"({names}). Now remove pole angle for step 2.")
+                    tone = "success"
+                else:
+                    msg = (f"Not step 1 yet: you trained with {count} observation(s) "
+                           f"({names}). Step 1 needs all 4 — drag in every observation, then train.")
+                    tone = "warn"
+            elif current_step == "without_angle":
+                if not has_angle:
+                    msg = (f"✓ Step 2 complete — you trained without pole angle "
+                           f"({names}). Now try any different combination for step 3.")
+                    tone = "success"
+                else:
+                    msg = ("Not step 2 yet: pole angle is still in the box. Drag pole "
+                           "angle OUT so the agent cannot see it, then train.")
+                    tone = "warn"
+            elif current_step == "free":
+                if not already_seen:
+                    msg = (f"✓ Step 3 complete — you tried a new combination "
+                           f"({names}). All experiments done; continue to actions.")
+                    tone = "success"
+                else:
+                    msg = (f"That combination ({names}) was already trained. Step 3 "
+                           "needs a NEW, different combination — change the box, then train.")
+                    tone = "warn"
+            else:
+                msg = (f"Trained with {count} observation(s): {names}. "
+                       "You've finished all three experiments — explore freely.")
+                tone = "success"
+            st.session_state["observation_demo_feedback"] = {"text": msg, "tone": tone}
+            # Rerun so the prompt and feedback update on this single click.
+            request_streamlit_rerun(st)
         run = st.session_state.get("observation_demo_playground_run")
         selected_feature_tuple = tuple(selected_features)
         if (
@@ -3177,6 +3239,25 @@ def render_action_slideshow_page(st: Any) -> None:
     did_free = len(action_runs) >= 4
 
     if not did_basic:
+        action_step = "basic"
+    elif not did_coast:
+        action_step = "coast"
+    elif not did_large:
+        action_step = "large"
+    elif not did_free:
+        action_step = "free"
+    else:
+        action_step = "done"
+
+    # Result of the last Train click: what menu they used and whether it met the step.
+    feedback = st.session_state.pop("action_demo_feedback", None)
+    if feedback:
+        if feedback.get("tone") == "success":
+            st.success(feedback["text"])
+        else:
+            st.warning(feedback["text"])
+
+    if not did_basic:
         render_guided_prompt(
             st,
             step_label="Step 1 of 4 · Push or push",
@@ -3278,7 +3359,55 @@ def render_action_slideshow_page(st: Any) -> None:
                 )
             st.session_state["action_demo_playground_run"] = run_result
             menu_key = tuple(round(float(force), 3) for force in forces_for_run)
+            already_seen = menu_key in action_runs
             action_runs[menu_key] = float(run_result.get("score", 0.0))
+
+            # Check this run against the step the student was on.
+            shown = ", ".join(f"{f:g}" for f in forces_for_run)
+            has_zero = any(abs(f) < 1e-6 for f in menu_key)
+            has_large = any(abs(f) >= 15.0 for f in menu_key)
+            is_basic = sorted(menu_key) == [-10.0, 10.0]
+            if action_step == "basic":
+                if is_basic:
+                    msg = (f"✓ Step 1 complete — you trained with just −10 and +10 ({shown}). "
+                           "Now add a 0 (no push) for step 2.")
+                    tone = "success"
+                else:
+                    msg = (f"Not step 1 yet: you used {shown}. Step 1 needs exactly −10 and "
+                           "+10 — clear the box and drag in only those two, then train.")
+                    tone = "warn"
+            elif action_step == "coast":
+                if has_zero:
+                    msg = (f"✓ Step 2 complete — your menu includes a 0 no-push ({shown}). "
+                           "Now try some really large forces (±15+) for step 3.")
+                    tone = "success"
+                else:
+                    msg = (f"Not step 2 yet: {shown} has no rest option. Add a 0 force so the "
+                           "agent can choose not to push, then train.")
+                    tone = "warn"
+            elif action_step == "large":
+                if has_large:
+                    msg = (f"✓ Step 3 complete — you used a large force ({shown}). "
+                           "Now design your own menu for step 4.")
+                    tone = "success"
+                else:
+                    msg = (f"Not step 3 yet: {shown} has no big force. Add a force of ±15 or "
+                           "more, then train.")
+                    tone = "warn"
+            elif action_step == "free":
+                if not already_seen:
+                    msg = (f"✓ Step 4 complete — you designed a new menu ({shown}). "
+                           "All experiments done; continue to the reward function.")
+                    tone = "success"
+                else:
+                    msg = (f"That menu ({shown}) was already trained. Step 4 needs a NEW, "
+                           "different menu — change the forces, then train.")
+                    tone = "warn"
+            else:
+                msg = f"Trained with {shown}. You've finished all four experiments — explore freely."
+                tone = "success"
+            st.session_state["action_demo_feedback"] = {"text": msg, "tone": tone}
+            request_streamlit_rerun(st)
         run = st.session_state.get("action_demo_playground_run")
         selected_action_tuple = tuple(action_forces)
         if (

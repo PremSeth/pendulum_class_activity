@@ -406,34 +406,7 @@
       streamlitMessage("streamlit:setFrameHeight", { height });
     }
 
-    function persistKeyFor(resetId) {
-      return "drag_canvas:" + String(resetId || "");
-    }
-
-    function persistValue() {
-      try {
-        window.sessionStorage.setItem(
-          persistKeyFor(state.resetId),
-          JSON.stringify(state.value)
-        );
-      } catch (err) {
-        /* sessionStorage may be unavailable; ignore. */
-      }
-    }
-
-    function restoredValueFor(resetId) {
-      try {
-        const raw = window.sessionStorage.getItem(persistKeyFor(resetId));
-        if (raw == null) return null;
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : null;
-      } catch (err) {
-        return null;
-      }
-    }
-
     function sendValue() {
-      persistValue();
       // Lock the frame height to the freshly rendered canvas height *before*
       // Streamlit reruns, so the iframe never collapses/expands mid-rerun
       // (which is what made the page flicker on the first drop). Defer the
@@ -1052,15 +1025,10 @@
       state.pool = Array.isArray(args.pool) ? args.pool : [];
       state.height = Number(args.height || 360);
       if (!state.initialized || incomingResetId !== state.resetId) {
-        // On a fresh mount with the same reset_id (e.g. Streamlit remounts the
-        // iframe mid-interaction), prefer the live value we persisted so the
-        // box does not flash back to empty before session state catches up.
-        const restored = incomingResetId === state.resetId || !state.initialized
-          ? restoredValueFor(incomingResetId)
-          : null;
-        const incomingValue = restored != null
-          ? restored
-          : (Array.isArray(args.value) ? args.value : []);
+        // Python (Streamlit session state) is the single source of truth for
+        // the value. Always take what it sends so the box never holds stale
+        // bubbles after a reset/mission change.
+        const incomingValue = Array.isArray(args.value) ? args.value : [];
         state.value = state.mode === "reward"
           ? normalizeRewardValue(incomingValue)
           : state.mode === "action"
@@ -1068,7 +1036,6 @@
             : incomingValue;
         state.initialized = true;
         state.resetId = incomingResetId;
-        persistValue();
       }
       render();
     });

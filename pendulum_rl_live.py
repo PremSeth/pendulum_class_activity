@@ -4459,7 +4459,12 @@ def run_streamlit_app() -> None:
     modules = require_dependencies("streamlit", "numpy", "pandas", "matplotlib.pyplot", "gymnasium", "torch")
     st = modules["streamlit"]
 
-    st.set_page_config(page_title="Live RL Pendulum Lab", page_icon="RL", layout="wide")
+    st.set_page_config(
+        page_title="Live RL Pendulum Lab",
+        page_icon="RL",
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
     render_instructor_controls(st)
 
     stage = str(st.session_state.get("app_stage", "intro"))

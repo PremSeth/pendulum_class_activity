@@ -4452,10 +4452,10 @@ def run_streamlit_app() -> None:
         st.caption(
             f"Pole length {settings.pole_length:g} (default 0.5). Longer poles are easier to balance because of greater rotational inertia."
         )
-    render_state_legend(st)
     weights = reward_controls(st)
     weights["animal_position"] = settings.animal_position
     weights["animal_radius"] = settings.animal_radius if settings.ethical_exploration else 0.0
+    render_state_legend(st)
 
     render_tutorial_anchor(st, "train")
     render_tutorial_callout(st, "train")

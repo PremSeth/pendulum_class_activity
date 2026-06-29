@@ -2196,9 +2196,10 @@ def render_observation_slideshow_page(st: Any) -> None:
     else:
         current_step = "done"
 
-    # Show the result of the last Train click: exactly what they used and
-    # whether it satisfied the step they were on.
-    feedback = st.session_state.pop("observation_demo_feedback", None)
+    # Show the result of the last Train click and keep it on screen until the
+    # next Train click overwrites it, so a "not yet" message stays put while the
+    # student fixes their selection instead of flickering away.
+    feedback = st.session_state.get("observation_demo_feedback")
     if feedback:
         tone = feedback.get("tone", "info")
         if tone == "success":
@@ -3249,8 +3250,9 @@ def render_action_slideshow_page(st: Any) -> None:
     else:
         action_step = "done"
 
-    # Result of the last Train click: what menu they used and whether it met the step.
-    feedback = st.session_state.pop("action_demo_feedback", None)
+    # Result of the last Train click: kept on screen until the next Train click
+    # overwrites it, so a "not yet" message stays put while the student retries.
+    feedback = st.session_state.get("action_demo_feedback")
     if feedback:
         if feedback.get("tone") == "success":
             st.success(feedback["text"])

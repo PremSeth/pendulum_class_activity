@@ -387,6 +387,7 @@
       height: 360,
       initialized: false,
       resetId: "",
+      valueRegistered: false,
     };
 
     function streamlitMessage(type, data) {
@@ -1024,6 +1025,7 @@
       state.title = args.title || "Builder";
       state.pool = Array.isArray(args.pool) ? args.pool : [];
       state.height = Number(args.height || 360);
+      let valueChanged = false;
       if (!state.initialized || incomingResetId !== state.resetId) {
         // Python (Streamlit session state) is the single source of truth for
         // the value. Always take what it sends so the box never holds stale
@@ -1036,8 +1038,21 @@
             : incomingValue;
         state.initialized = true;
         state.resetId = incomingResetId;
+        valueChanged = true;
       }
       render();
+
+      // Register the widget's value with Streamlit on first render so the
+      // first user drag is a value *update*, not the "first ever value" event
+      // that makes Streamlit re-instantiate the iframe (the page flicker /
+      // blank reload on the first drop).
+      if (valueChanged && !state.valueRegistered) {
+        state.valueRegistered = true;
+        streamlitMessage("streamlit:setComponentValue", {
+          value: state.value,
+          dataType: "json",
+        });
+      }
     });
 
     ready();

@@ -1855,6 +1855,7 @@ def build_controlled_demo_run(
     features: tuple[str, ...],
     action_forces: tuple[float, ...],
     seed: int,
+    reward_weights: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     settings = TrainSettings(
         algorithm="Q-learning",
@@ -1872,7 +1873,9 @@ def build_controlled_demo_run(
         # demos so students see a consistent starting state, not a random tilt.
         initial_state=(0.0, 0.0, 0.0, 0.0),
     )
-    result = train_q_learning(settings, CONTROLLED_DEMO_REWARD_WEIGHTS, label="Demo")
+    result = train_q_learning(
+        settings, reward_weights or CONTROLLED_DEMO_REWARD_WEIGHTS, label="Demo"
+    )
     _, env_score, _, frames = evaluate_policy(
         result,
         seed=seed + 200,
@@ -1895,14 +1898,17 @@ def cached_controlled_demo_run(
     features: tuple[str, ...],
     action_forces: tuple[float, ...],
     seed: int,
+    reward_weights: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     cache = st.session_state.setdefault(cache_name, {})
-    key = (CONTROLLED_DEMO_VERSION, features, action_forces, seed)
+    reward_key = json.dumps(reward_weights, sort_keys=True) if reward_weights else ""
+    key = (CONTROLLED_DEMO_VERSION, features, action_forces, seed, reward_key)
     if key not in cache:
         cache[key] = build_controlled_demo_run(
             features=features,
             action_forces=action_forces,
             seed=seed,
+            reward_weights=reward_weights,
         )
     return dict(cache[key])
 
@@ -2857,6 +2863,47 @@ def render_reward_slideshow_page(st: Any) -> None:
         )
     else:
         st.caption("Drag in cart position and pole angle to build the reward described above.")
+
+    # Let them train their own reward and watch the pendulum behave.
+    can_train_reward = bool(demo_reward_terms)
+    if st.button(
+        "Train with your reward",
+        type="primary",
+        use_container_width=True,
+        disabled=not can_train_reward,
+        key="reward_demo_train_button",
+    ):
+        st.session_state["reward_demo_train_requested"] = True
+    if not can_train_reward:
+        st.caption("Build a reward function above before training.")
+
+    train_reward_demo = (
+        bool(st.session_state.get("reward_demo_train_requested", False))
+        and can_train_reward
+    )
+    if train_reward_demo:
+        st.session_state.pop("reward_demo_train_requested", None)
+        reward_for_run = {"reward_terms": demo_reward_terms, "reward_tokens": reward_tokens}
+        with st.spinner("Training a Q-learning agent with your reward..."):
+            st.session_state["reward_demo_playground_run"] = cached_controlled_demo_run(
+                st,
+                cache_name="controlled_reward_demo_cache",
+                features=DEFAULT_OBSERVATION_FEATURES,
+                action_forces=ACTION_PRESETS["Standard left/right"],
+                seed=21,
+                reward_weights=reward_for_run,
+            )
+        request_streamlit_rerun(st)
+
+    reward_run = st.session_state.get("reward_demo_playground_run")
+    if isinstance(reward_run, dict) and reward_run.get("gif_bytes"):
+        st.markdown(
+            f'<div class="reward-slide-note"><strong>Your reward, trained:</strong> the agent'
+            f' balanced for {int(round(float(reward_run.get("score", 0.0))))} steps'
+            f' (out of {DEMO_MAX_STEPS}). Watch where it tries to keep the cart and pole.</div>',
+            unsafe_allow_html=True,
+        )
+        st.image(reward_run["gif_bytes"], width="stretch")
 
     st.markdown(
         """

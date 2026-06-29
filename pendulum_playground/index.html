@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --ink: #182230;
+      --muted: #475467;
+      --line: #d0d5dd;
+      --accent: #2563eb;
+      --bg: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--ink); }
+    #root { padding: 4px; }
+    .wrap {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 14px;
+      align-items: stretch;
+    }
+    @media (max-width: 720px) {
+      .wrap { grid-template-columns: 1fr; }
+    }
+    .stage {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #f8fafc, #eef2f7);
+      padding: 6px;
+      position: relative;
+      user-select: none;
+    }
+    canvas { display: block; width: 100%; height: auto; border-radius: 8px; cursor: grab; touch-action: none; }
+    canvas.grabbing { cursor: grabbing; }
+    .hint {
+      font-size: 0.82rem;
+      color: var(--muted);
+      text-align: center;
+      margin: 6px 2px 2px;
+      line-height: 1.35;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .panel h3 {
+      margin: 0;
+      font-size: 1.02rem;
+      font-weight: 800;
+    }
+    .panel .sub { font-size: 0.82rem; color: var(--muted); margin-top: -4px; }
+    .obs {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .obs-row {
+      border: 1px solid #e4e7ec;
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fcfdff;
+    }
+    .obs-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .obs-name { font-weight: 700; font-size: 0.9rem; }
+    .obs-val {
+      font-variant-numeric: tabular-nums;
+      font-weight: 800;
+      font-size: 1.0rem;
+      color: var(--accent);
+    }
+    .obs-meter {
+      position: relative;
+      height: 8px;
+      border-radius: 999px;
+      background: #eef2f7;
+      margin-top: 7px;
+      overflow: hidden;
+    }
+    .obs-zero {
+      position: absolute;
+      left: 50%;
+      top: -2px;
+      bottom: -2px;
+      width: 1px;
+      background: #cbd5e1;
+    }
+    .obs-fill {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      background: var(--accent);
+      border-radius: 999px;
+    }
+    .obs-scale {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.68rem;
+      color: #98a2b3;
+      margin-top: 3px;
+      font-variant-numeric: tabular-nums;
+    }
+    .reset {
+      align-self: flex-start;
+      border: 1px solid var(--line);
+      background: #f9fafb;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .reset:hover { background: #eef2f7; }
+    .note { font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="wrap">
+      <div class="stage">
+        <canvas id="stage" width="640" height="420"></canvas>
+        <div class="hint">
+          Drag the <strong>cart</strong> left and right, or grab the <strong>pole</strong> and swing it around.
+          Watch every observation update live.
+        </div>
+      </div>
+      <div class="panel">
+        <div>
+          <h3>What the agent observes</h3>
+          <div class="sub">All values normalized to the &minus;&pi; … &pi; range.</div>
+        </div>
+        <div class="obs" id="obs"></div>
+        <button class="reset" id="reset">Reset pendulum</button>
+        <div class="note">
+          The agent never sees the picture &mdash; only these numbers. Moving the cart fast
+          changes cart velocity; flicking the pole changes pole velocity.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PI = Math.PI;
+
+    function streamlitMessage(type, data) {
+      window.parent.postMessage(
+        Object.assign({ isStreamlitMessage: true, type }, data || {}),
+        "*"
+      );
+    }
+    function ready() {
+      streamlitMessage("streamlit:componentReady", { apiVersion: 1 });
+    }
+    function setHeight() {
+      const root = document.getElementById("root");
+      streamlitMessage("streamlit:setFrameHeight", { height: root.scrollHeight + 6 });
+    }
+
+    // Physical limits used for normalization to the -pi..pi range.
+    const X_LIMIT = 2.4;        // cart position bound (m)
+    const XDOT_LIMIT = 3.0;     // cart velocity bound (m/s)
+    const THETADOT_LIMIT = 3.5; // pole angular velocity bound (rad/s)
+
+    // World state (raw physical units).
+    const state = {
+      x: 0.0,        // cart position (m)
+      xDot: 0.0,     // cart velocity (m/s)
+      theta: 0.0,    // pole angle (rad), 0 = straight up
+      thetaDot: 0.0, // pole angular velocity (rad/s)
+    };
+
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    // Wrap an angle to (-pi, pi].
+    function wrapAngle(a) {
+      let r = ((a + PI) % (2 * PI));
+      if (r < 0) r += 2 * PI;
+      return r - PI;
+    }
+
+    // Each observation, mapped to the -pi..pi range for display.
+    function observations() {
+      return [
+        {
+          key: "cart_position",
+          name: "Cart position",
+          value: clamp(state.x / X_LIMIT, -1, 1) * PI,
+        },
+        {
+          key: "cart_velocity",
+          name: "Cart velocity",
+          value: clamp(state.xDot / XDOT_LIMIT, -1, 1) * PI,
+        },
+        {
+          key: "pole_angle",
+          name: "Pole angle",
+          value: wrapAngle(state.theta),
+        },
+        {
+          key: "pole_angular_velocity",
+          name: "Pole velocity",
+          value: clamp(state.thetaDot / THETADOT_LIMIT, -1, 1) * PI,
+        },
+      ];
+    }
+
+    const canvas = document.getElementById("stage");
+    const ctx = canvas.getContext("2d");
+
+    // Pixel geometry.
+    const W = canvas.width, H = canvas.height;
+    const TRACK_Y = H * 0.62;
+    const PX_PER_M = (W * 0.40) / X_LIMIT; // map +/-X_LIMIT across most of the width
+    const CART_W = 90, CART_H = 44;
+    const POLE_LEN_PX = 150;
+    const POLE_W = 12;
+
+    function cartPx() { return W / 2 + state.x * PX_PER_M; }
+
+    function poleTip() {
+      const cx = cartPx();
+      const cy = TRACK_Y - CART_H / 2;
+      // theta = 0 points straight up; positive theta tips to the right.
+      return {
+        baseX: cx, baseY: cy,
+        tipX: cx + POLE_LEN_PX * Math.sin(state.theta),
+        tipY: cy - POLE_LEN_PX * Math.cos(state.theta),
+      };
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+
+      // Track
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(W * 0.06, TRACK_Y + CART_H / 2 + 4);
+      ctx.lineTo(W * 0.94, TRACK_Y + CART_H / 2 + 4);
+      ctx.stroke();
+
+      // Center reference tick
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(W / 2, TRACK_Y + CART_H / 2 + 1);
+      ctx.lineTo(W / 2, TRACK_Y + CART_H / 2 + 12);
+      ctx.stroke();
+
+      const cx = cartPx();
+
+      // Cart
+      ctx.fillStyle = "#1d4ed8";
+      roundRect(ctx, cx - CART_W / 2, TRACK_Y - CART_H / 2, CART_W, CART_H, 8);
+      ctx.fill();
+
+      // Wheels
+      ctx.fillStyle = "#0f172a";
+      circle(ctx, cx - CART_W / 3, TRACK_Y + CART_H / 2, 8);
+      circle(ctx, cx + CART_W / 3, TRACK_Y + CART_H / 2, 8);
+
+      // Pole
+      const p = poleTip();
+      ctx.strokeStyle = "#b45309";
+      ctx.lineWidth = POLE_W;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(p.baseX, p.baseY);
+      ctx.lineTo(p.tipX, p.tipY);
+      ctx.stroke();
+
+      // Pole tip knob
+      ctx.fillStyle = "#92400e";
+      circle(ctx, p.tipX, p.tipY, 10);
+
+      // Pivot
+      ctx.fillStyle = "#0f172a";
+      circle(ctx, p.baseX, p.baseY, 5);
+    }
+
+    function roundRect(c, x, y, w, h, r) {
+      c.beginPath();
+      c.moveTo(x + r, y);
+      c.arcTo(x + w, y, x + w, y + h, r);
+      c.arcTo(x + w, y + h, x, y + h, r);
+      c.arcTo(x, y + h, x, y, r);
+      c.arcTo(x, y, x + w, y, r);
+      c.closePath();
+    }
+    function circle(c, x, y, r) { c.beginPath(); c.arc(x, y, r, 0, 2 * PI); c.fill(); }
+
+    function fmt(v) {
+      const s = v >= 0 ? "+" : "−";
+      return s + Math.abs(v).toFixed(2);
+    }
+
+    function renderObs() {
+      const obs = observations();
+      const container = document.getElementById("obs");
+      container.innerHTML = obs.map((o) => {
+        const frac = clamp(o.value / PI, -1, 1); // -1..1
+        const half = 50; // percent
+        const widthPct = Math.abs(frac) * half;
+        const leftPct = frac >= 0 ? half : half - widthPct;
+        return `
+          <div class="obs-row">
+            <div class="obs-top">
+              <span class="obs-name">${o.name}</span>
+              <span class="obs-val">${fmt(o.value)} rad</span>
+            </div>
+            <div class="obs-meter">
+              <div class="obs-zero"></div>
+              <div class="obs-fill" style="left:${leftPct}%; width:${widthPct}%;"></div>
+            </div>
+            <div class="obs-scale"><span>&minus;π</span><span>0</span><span>π</span></div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function frame() {
+      draw();
+      renderObs();
+    }
+
+    // ---- Interaction --------------------------------------------------------
+    let dragMode = null; // "cart" | "pole" | null
+    let lastX = 0, lastTheta = 0, lastT = 0;
+
+    function canvasPoint(evt) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const src = evt.touches ? evt.touches[0] : evt;
+      return {
+        x: (src.clientX - rect.left) * scaleX,
+        y: (src.clientY - rect.top) * scaleY,
+      };
+    }
+
+    function hitTest(pt) {
+      const p = poleTip();
+      // Distance to pole segment
+      const dx = p.tipX - p.baseX, dy = p.tipY - p.baseY;
+      const len2 = Math.max(1e-6, dx * dx + dy * dy);
+      let t = ((pt.x - p.baseX) * dx + (pt.y - p.baseY) * dy) / len2;
+      t = clamp(t, 0, 1);
+      const projX = p.baseX + t * dx, projY = p.baseY + t * dy;
+      const poleDist = Math.hypot(pt.x - projX, pt.y - projY);
+      if (poleDist <= POLE_W + 12) return "pole";
+
+      const cx = cartPx();
+      if (
+        pt.x >= cx - CART_W / 2 - 6 && pt.x <= cx + CART_W / 2 + 6 &&
+        pt.y >= TRACK_Y - CART_H / 2 - 6 && pt.y <= TRACK_Y + CART_H / 2 + 12
+      ) return "cart";
+      return null;
+    }
+
+    function startDrag(evt) {
+      const pt = canvasPoint(evt);
+      dragMode = hitTest(pt);
+      if (!dragMode) return;
+      evt.preventDefault();
+      canvas.classList.add("grabbing");
+      lastT = performance.now();
+      lastX = state.x;
+      lastTheta = state.theta;
+    }
+
+    function moveDrag(evt) {
+      if (!dragMode) return;
+      evt.preventDefault();
+      const pt = canvasPoint(evt);
+      const now = performance.now();
+      const dt = Math.max(0.016, (now - lastT) / 1000);
+
+      if (dragMode === "cart") {
+        const newX = clamp((pt.x - W / 2) / PX_PER_M, -X_LIMIT, X_LIMIT);
+        state.xDot = clamp((newX - lastX) / dt, -XDOT_LIMIT, XDOT_LIMIT);
+        state.x = newX;
+        lastX = newX;
+      } else if (dragMode === "pole") {
+        const cx = cartPx();
+        const cy = TRACK_Y - CART_H / 2;
+        // angle from vertical: atan2(dx, -dy) so up = 0, right = +
+        const newTheta = Math.atan2(pt.x - cx, -(pt.y - cy));
+        let dTheta = wrapAngle(newTheta - lastTheta);
+        state.thetaDot = clamp(dTheta / dt, -THETADOT_LIMIT, THETADOT_LIMIT);
+        state.theta = newTheta;
+        lastTheta = newTheta;
+      }
+      lastT = now;
+      frame();
+    }
+
+    function endDrag() {
+      if (!dragMode) return;
+      dragMode = null;
+      canvas.classList.remove("grabbing");
+      // Velocities settle to 0 once the student lets go.
+      state.xDot = 0;
+      state.thetaDot = 0;
+      frame();
+    }
+
+    canvas.addEventListener("mousedown", startDrag);
+    window.addEventListener("mousemove", moveDrag);
+    window.addEventListener("mouseup", endDrag);
+    canvas.addEventListener("touchstart", startDrag, { passive: false });
+    window.addEventListener("touchmove", moveDrag, { passive: false });
+    window.addEventListener("touchend", endDrag);
+
+    document.getElementById("reset").addEventListener("click", () => {
+      state.x = 0; state.xDot = 0; state.theta = 0; state.thetaDot = 0;
+      frame();
+    });
+
+    window.addEventListener("message", (event) => {
+      const data = event.data || {};
+      if (data.type !== "streamlit:render") return;
+      frame();
+      setHeight();
+    });
+
+    frame();
+    setHeight();
+    ready();
+  </script>
+</body>
+</html>

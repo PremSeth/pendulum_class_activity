@@ -591,6 +591,22 @@ def drag_canvas_component(
     )
 
 
+_PENDULUM_PLAYGROUND_COMPONENT: Any | None = None
+
+
+def pendulum_playground_component(*, height: int = 470, key: str = "pendulum_playground") -> Any:
+    """Render the interactive drag-the-pendulum explainer component."""
+    global _PENDULUM_PLAYGROUND_COMPONENT
+    components = require_dependencies("streamlit.components.v1")["streamlit.components.v1"]
+    if _PENDULUM_PLAYGROUND_COMPONENT is None:
+        component_dir = Path(__file__).parent / "pendulum_playground"
+        _PENDULUM_PLAYGROUND_COMPONENT = components.declare_component(
+            "pendulum_playground",
+            path=str(component_dir),
+        )
+    return _PENDULUM_PLAYGROUND_COMPONENT(height=height, key=key)
+
+
 ACTION_PRESETS: dict[str, tuple[float, ...]] = {
     "Standard left/right": (-10.0, 10.0),
     "Gentle left/none/right": (-5.0, 0.0, 5.0),
@@ -1726,7 +1742,7 @@ def render_background_page(st: Any) -> None:
     left, center, right = st.columns([1, 1.2, 1])
     with center:
         if st.button("Continue", type="primary", use_container_width=True):
-            set_app_stage(st, "observation_demo")
+            set_app_stage(st, "pendulum_intro")
 
 
 # ---------------------------------------------------------------------------
@@ -1877,6 +1893,53 @@ def cached_controlled_demo_run(
             seed=seed,
         )
     return dict(cache[key])
+
+
+def render_pendulum_intro_page(st: Any) -> None:
+    """Interactive 'meet the inverted pendulum' explainer before observations."""
+    st.markdown(
+        """
+        <style>
+        .pendulum-intro-lead {
+            font-size: 1.22rem;
+            line-height: 1.55;
+            margin: 0.35rem 0 0.6rem;
+            color: #243447;
+        }
+        .pendulum-intro-note {
+            font-size: 1.05rem;
+            line-height: 1.5;
+            color: #475467;
+            margin: 0.2rem 0 1rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.title("Meet the inverted pendulum")
+    st.markdown(
+        """
+        <div class="pendulum-intro-lead">
+            This is the world the agent lives in: a cart on a track with a pole
+            balanced on top. Drag the cart or grab the pole and move it around.
+        </div>
+        <div class="pendulum-intro-note">
+            The agent never sees the picture &mdash; it only sees the four numbers on
+            the right. Every value is mapped to the same &minus;&pi; … &pi; scale so
+            you can compare them. Play with it until the numbers make sense, then
+            continue to learn how observations shape what the agent can do.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    pendulum_playground_component()
+
+    back_column, next_column = st.columns(2)
+    if back_column.button("Back", use_container_width=True):
+        set_app_stage(st, "background")
+    if next_column.button("Continue", type="primary", use_container_width=True):
+        set_app_stage(st, "observation_demo")
 
 
 def render_observation_slideshow_page(st: Any) -> None:
@@ -2102,7 +2165,7 @@ def render_observation_slideshow_page(st: Any) -> None:
     can_continue = isinstance(st.session_state.get("observation_demo_playground_run"), dict)
     back_column, next_column = st.columns(2)
     if back_column.button("Back", use_container_width=True):
-        set_app_stage(st, "background")
+        set_app_stage(st, "pendulum_intro")
     if can_continue and next_column.button("Continue", type="primary", use_container_width=True, key="observation_demo_continue"):
         set_app_stage(st, "action_demo")
 
@@ -4335,6 +4398,7 @@ def render_instructor_controls(st: Any) -> None:
         page_options = {
             "Home": "intro",
             "Background": "background",
+            "Meet the pendulum": "pendulum_intro",
             "Observation slides": "observation_demo",
             "Action slides": "action_demo",
             "Algorithm slides": "algorithm_demo",
@@ -4595,6 +4659,9 @@ def run_streamlit_app() -> None:
         return
     if stage == "background":
         render_background_page(st)
+        return
+    if stage == "pendulum_intro":
+        render_pendulum_intro_page(st)
         return
     if stage == "observation_demo":
         render_observation_slideshow_page(st)

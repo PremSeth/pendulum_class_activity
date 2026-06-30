@@ -77,28 +77,14 @@
       the way an RL agent has to.</p>
     </div>
 
-    <!-- EXAMPLE BOARD -->
+    <!-- TASK -->
     <div class="section" id="sec-example">
       <div class="kicker">Your task</div>
-      <h3>Wander, watch your score, and learn the game</h3>
-      <p class="lead">You start in the top-left 🙂. There's a 🚩 flag in the bottom-right corner.
-      Some squares help your score, some hurt it — <b>we won't say which.</b> Use the arrow keys,
-      keep an eye on your score, and learn from what happens.</p>
-      <div class="row" style="align-items:center;">
-        <div class="center">
-          <canvas id="example" width="360" height="360"></canvas>
-          <div class="hint">An example board (you won't get this top-down view while playing)</div>
-        </div>
-        <div style="flex:1; min-width:240px;">
-          <p class="note"><b>The catch:</b> once you start, this full view disappears. Like a real
-          agent, you'll only see the squares <b>directly next to you</b> (up, down, left, right) —
-          so you have to explore to learn what's out there.</p>
-          <p class="note">You'll play at least <b>3 rounds</b> (the board reshuffles each time). Keep
-          going until you've reached the 🚩 flag — then you'll watch an RL agent learn the very same
-          game.</p>
-          <button class="btn primary big" id="start-playing">Start — I'll figure it out ▶</button>
-        </div>
-      </div>
+      <h3>Figure out how to play — like an agent would</h3>
+      <p class="lead">You're about to be dropped into a random game. <b>No rules, no instructions.</b>
+      Move around, watch your score, and learn how it works through <b>trial and error</b>. You'll
+      only see the squares right next to you — so you have to explore.</p>
+      <button class="btn primary big" id="start-playing">Start</button>
     </div>
 
     <!-- PLAY (observation-only) -->
@@ -228,9 +214,6 @@
       ctx.font=(cell*0.62)+"px serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
       ctx.fillText("🙂", a.x*cell+cell/2, a.y*cell+cell/2+1);
     }
-
-    // example board (static, full view) — a different layout from the learning board.
-    drawBoard(document.getElementById("example").getContext("2d"), makeBoard(4242), {x:0,y:0}, "all");
 
     // ---- Simulation core (shared by play, replay, training) ------------------
     function simStep(b,a,action){

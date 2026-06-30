@@ -2261,6 +2261,12 @@ def render_observation_slideshow_page(st: Any) -> None:
             " right; lean left, push left &mdash; and the bin grid splits those two sides right"
             " at the boundary. That sign-flipping pattern is trickier to pin down than a"
             " smoother, less symmetric signal.<br><br>"
+            "<strong>3. One signal can stand in for another.</strong> For the simple goal of"
+            " &lsquo;balance as long as possible,&rsquo; pole <em>velocity</em> is almost as"
+            " useful as pole <em>angle</em>. The pole is falling in whatever direction it is"
+            " rotating, so the agent can just learn to push the cart toward the pole&rsquo;s spin"
+            " to catch it &mdash; without ever being told the exact angle. The best observation"
+            " set depends on the task, not just on how much information you can pile on.<br><br>"
             "The <strong>right</strong> observations matter more than the <strong>most</strong>"
             " observations. Continue to learn about <strong>actions</strong>.",
             tone="success",

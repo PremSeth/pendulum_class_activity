@@ -454,7 +454,7 @@ REWARD_DEMO_WEIGHTS: dict[str, dict[str, Any]] = {
 }
 
 
-CONTROLLED_DEMO_VERSION = "controlled-demo-v7-rewardlesson"
+CONTROLLED_DEMO_VERSION = "controlled-demo-v8-1k"
 DEMO_EPISODES = 500
 # The reward demos need to converge enough to show the cos-vs-sin difference, so
 # they train longer than the snappy observation/action demos.
@@ -470,7 +470,7 @@ DEMO_Q_BINS = 6
 # reward reliably balances (so students can trust what they see). Tabular
 # Q-learning on the 4D state needs more bins and more episodes than the snappy
 # observation/action demos use.
-REWARD_LESSON_EPISODES = 1500
+REWARD_LESSON_EPISODES = 1000
 REWARD_LESSON_Q_BINS = 10
 REWARD_LESSON_LEARNING_RATE = 0.1
 REWARD_LESSON_EPSILON_MIN = 0.01

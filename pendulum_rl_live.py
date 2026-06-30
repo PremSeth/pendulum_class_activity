@@ -3083,7 +3083,7 @@ def render_reward_design_exercise(st: Any) -> None:
             )
             # Side-by-side: the good +1-alive agent vs the lazy +10 agent, both
             # rolled out in the SAME fall-allowed world.
-            with st.spinner("Comparing the +1 alive agent and the lazy agent..."):
+            with st.spinner("Training..."):
                 comparison = cached_lazy_comparison(st, seed=21)
             st.markdown(
                 "**Same environment, both allowed to fall — compare them:**"

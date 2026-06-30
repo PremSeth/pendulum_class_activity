@@ -68,35 +68,35 @@
     <!-- HERO -->
     <div class="hero">
       <div class="kicker">Reinforcement Learning</div>
-      <h1>Learning by trying.</h1>
-      <p>An <b>agent</b> is dropped into a world it doesn't understand. No instructions, no map —
-      just what it can sense right now, the moves it can make, and a <b>reward</b> when things go
-      well. By trying, failing, and trying again, it figures out a winning strategy on its own.
-      <br><br><b>For the next few minutes, that agent is you.</b></p>
+      <h1>You are the agent.</h1>
+      <p>A reinforcement learning agent is dropped into a world with <b>no rulebook</b>. It doesn't
+      know what helps or what hurts — it just senses what's around it, tries a move, and sees what
+      score it gets. Bit by bit, it learns a winning strategy on its own.
+      <br><br><b>We're going to make you that agent.</b> You'll play a little game, but
+      <b>we won't tell you the rules.</b> Move around, watch your score, and figure it out — exactly
+      the way an RL agent has to.</p>
     </div>
 
     <!-- EXAMPLE BOARD -->
     <div class="section" id="sec-example">
-      <div class="kicker">The world</div>
-      <h3>Here's the game you'll play</h3>
-      <p class="lead">Reach the <b>🚩 goal</b> to win the round. Grab <b>💎 gems</b> for points along
-      the way, avoid <b>🔺 spikes</b>, and <b>⬛ walls</b> block you. You start at the top-left.</p>
+      <div class="kicker">Your task</div>
+      <h3>Wander, watch your score, and learn the game</h3>
+      <p class="lead">You start in the top-left 🙂. There's a 🚩 flag in the bottom-right corner.
+      Some squares help your score, some hurt it — <b>we won't say which.</b> Use the arrow keys,
+      keep an eye on your score, and learn from what happens.</p>
       <div class="row" style="align-items:center;">
         <div class="center">
           <canvas id="example" width="360" height="360"></canvas>
-          <div class="hint">An example board (full view)</div>
+          <div class="hint">An example board (you won't get this top-down view while playing)</div>
         </div>
         <div style="flex:1; min-width:240px;">
-          <div class="legend" style="font-size:1.02rem;">
-            <span><b>🙂</b> you</span><span><b>🚩</b> goal (+25, ends round)</span>
-            <span><b>💎</b> gem (+10)</span><span><b>🔺</b> spike (−10)</span><span><b>⬛</b> wall</span>
-          </div>
-          <p class="note">Each move costs a little, so wandering isn't free. You'll have a limited
-          number of moves — reach the goal before they run out.</p>
-          <p class="note"><b>Here's the twist:</b> once you start, this top-down view goes away. Like
-          a real agent, you'll only see the cells <i>immediately around you</i>. You have to navigate
-          by feel.</p>
-          <button class="btn primary big" id="start-playing">I'm ready — start playing ▶</button>
+          <p class="note"><b>The catch:</b> once you start, this full view disappears. Like a real
+          agent, you'll only see the squares <b>directly next to you</b> (up, down, left, right) —
+          so you have to explore to learn what's out there.</p>
+          <p class="note">You'll play at least <b>3 rounds</b> (the board reshuffles each time). Keep
+          going until you've reached the 🚩 flag — then you'll watch an RL agent learn the very same
+          game.</p>
+          <button class="btn primary big" id="start-playing">Start — I'll figure it out ▶</button>
         </div>
       </div>
     </div>
@@ -104,7 +104,7 @@
     <!-- PLAY (observation-only) -->
     <div class="section hidden" id="sec-play">
       <div class="kicker">Round <span id="round-num">1</span> of <span id="round-total">3</span></div>
-      <h3>Find the goal — you only see what's around you</h3>
+      <h3>Explore. You only see what's next to you.</h3>
       <div class="rounds" id="rounds"></div>
       <div class="row" style="align-items:flex-start;">
         <div class="center">
@@ -116,64 +116,36 @@
           <div class="hint">Click the grid, then steer with ← ↑ → ↓</div>
         </div>
         <div class="obs-card">
-          <h4>👁️ Your observation</h4>
+          <h4>👁️ What you can see</h4>
           <div class="obs-grid3" id="obs-grid"></div>
-          <p class="note" style="color:#9ca3af; margin-top:12px;">This 3×3 window is everything the
-          agent gets. The goal could be one step away and you wouldn't know until you see it.</p>
+          <p class="note" style="color:#9ca3af; margin-top:12px;">Only your four neighbors — up,
+          down, left, right. This is your whole <b>observation</b>. ⛔ marks the edge of the grid.</p>
         </div>
       </div>
       <div class="note" id="play-feedback"></div>
     </div>
 
-    <!-- POLICY IMPROVES -->
-    <div class="section hidden" id="sec-policy">
-      <div class="kicker">Learning from you</div>
-      <h3>The agent learns from your round — watch it play</h3>
-      <p class="lead">Every step you took became one piece of experience:
-      <b>&ldquo;in this spot, I tried this move, and got this reward.&rdquo;</b> The agent treats
-      <i>your</i> moves as its exploration, and the <b>reward is the signal</b> that says which of
-      those moves were good. It then plays the same board with what it learned — right after you.</p>
-      <details style="margin:0 0 12px;">
-        <summary style="cursor:pointer; font-weight:700; color:var(--accent);">How does that actually train a policy?</summary>
-        <p class="note" style="margin-top:8px;">For each of your moves, the agent does a tiny update:
-        nudge the value of <i>that move in that spot</i> toward <code>reward you got + the value of
-        where it led</code>. A spike's −25 pushes those moves down; the goal's +80 pulls the moves
-        that led there up; and crucially the value <b>propagates backward</b> step by step, so even
-        the early moves on a good path become &lsquo;good.&rsquo; This is <b>Q-learning</b>, and
-        because it learns the value of the <i>best</i> move (not the one you happened to take), the
-        agent can end up playing <b>better than you did.</b></p>
-      </details>
-      <div class="row" style="align-items:center;">
-        <div class="center">
-          <canvas id="policy-replay" width="300" height="300"></canvas>
-          <div class="hud"><span class="chip good" id="policy-score">—</span></div>
-          <div class="hint">The policy that just learned from you, playing the same board</div>
-        </div>
-        <div style="flex:1; min-width:240px;">
-          <div class="barwrap" id="policy-bars"></div>
-          <p class="note" id="policy-note" style="margin-top:34px;"></p>
-        </div>
-      </div>
-    </div>
-
     <!-- RL FROM SCRATCH -->
     <div class="section hidden" id="sec-scratch">
-      <div class="kicker">No demonstrations needed</div>
-      <h3>Now watch an agent learn it from scratch</h3>
-      <p class="lead">You gave your policy a head start with examples. But an RL agent can learn the
-      <i>same</i> game with <b>no demonstrations at all</b> — just by trying actions and chasing
-      reward. It starts out flailing randomly. Give it time.</p>
-      <div class="row" style="align-items:center;">
+      <div class="kicker">Now the machine's turn</div>
+      <h3>Watch an RL agent learn the same game</h3>
+      <p class="lead">You just learned this game with no rulebook — only by trying things and watching
+      your score. Now an <b>RL agent</b> does exactly that, from zero. It starts out moving randomly
+      and dying on spikes. As it plays thousands of rounds, it keeps what worked and drops what
+      didn't. Watch the <b>reward graph</b> climb as it gets better.</p>
+      <div class="row" style="align-items:flex-start;">
         <div class="center">
           <canvas id="scratch-replay" width="300" height="300"></canvas>
           <div class="hud">
             <span class="chip" id="scratch-ep">Episode 0</span>
             <span class="chip good" id="scratch-score">—</span>
           </div>
+          <div class="hint">A fresh, never-seen board each time</div>
         </div>
-        <div style="flex:1; min-width:240px;">
-          <div class="barwrap" id="scratch-bars"></div>
-          <p class="note" id="scratch-note" style="margin-top:34px;"></p>
+        <div style="flex:1; min-width:260px;">
+          <div style="font-weight:700; margin-bottom:4px;">Reward over training</div>
+          <div id="scratch-graph"></div>
+          <p class="note" id="scratch-note" style="margin-top:10px;"></p>
           <button class="btn primary big" id="scratch-btn">Let it learn ▶</button>
         </div>
       </div>
@@ -183,9 +155,10 @@
     <div class="section hidden" id="sec-done">
       <div class="kicker">You've got the idea</div>
       <h3>That's reinforcement learning</h3>
-      <p class="lead">Sense the world, pick an action, collect reward, and adjust — over and over —
-      until a good strategy emerges. You did it by hand; the agent did it on its own. Next, we'll
-      open up <b>how</b> that learning actually works, then point it all at balancing a pendulum.</p>
+      <p class="lead">Sense the world, try an action, see the reward, and adjust — over and over —
+      until a good strategy emerges, with nobody ever spelling out the rules. You did it; the agent
+      did it. Next we'll open up <b>how</b> that reward graph and the learning behind it actually
+      work — then point it all at balancing a pendulum.</p>
     </div>
 
   </div>
@@ -197,39 +170,41 @@
     function show(id){ document.getElementById(id).classList.remove("hidden"); }
 
     // ---- World ---------------------------------------------------------------
-    const N=6, MAX_MOVES=30, TOTAL_ROUNDS=3;
-    const EMPTY=0,GEM=1,SPIKE=2,WALL=3,GOAL=4;
-    const EMOJI={[EMPTY]:"",[GEM]:"💎",[SPIKE]:"🔺",[WALL]:"⬛",[GOAL]:"🚩"};
+    const N=6, MAX_MOVES=40, TOTAL_ROUNDS=3;
+    const EMPTY=0,GEM=1,SPIKE=2,GOAL=4,OFF=-1;   // no walls; OFF = off-grid
+    const EMOJI={[EMPTY]:"",[GEM]:"💎",[SPIKE]:"🔺",[GOAL]:"🚩"};
     const ACTIONS=["up","down","left","right"];
+    const AIDX={up:0,down:1,left:2,right:3};
     const DCELL={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
-    // Reaching the goal clearly dominates gem-grabbing, so the learned policy
-    // commits to finishing instead of looping for gems. Spikes are INSTANT
-    // DEATH: hitting one ends the round with a big penalty.
+    // Reaching the goal (always bottom-right) dominates gems, so the policy
+    // commits to finishing. Spikes are INSTANT DEATH: hitting one ends the round.
     const STEP_COST=-0.3, GEM_R=6, SPIKE_R=-25, GOAL_R=80;
-    // The learning sections use one fixed board so tabular Q-learning can solve
-    // it (a brand-new random maze every episode is not learnable in time). Seed
-    // 2 is verified: the goal is reachable without forced death, and an agent
-    // reliably learns to reach it.
-    const LEARN_SEED=2;
 
     function rngFrom(seed){ let s=seed>>>0; return ()=>(s=(s*1664525+1013904223)>>>0)/4294967296; }
+    // The gems and spikes are SHUFFLED on every board (the goal stays in the
+    // bottom-right). So the agent can't memorize one map — it has to learn
+    // transferable rules from what it sees around it.
     function makeBoard(seed){
-      const rng=rngFrom(seed);
+      const rng = (seed===undefined) ? Math.random : rngFrom(seed);
       const b=[]; for(let y=0;y<N;y++){ b.push([]); for(let x=0;x<N;x++) b[y].push(EMPTY); }
-      b[N-1][N-1]=GOAL; // goal bottom-right
+      b[N-1][N-1]=GOAL;
       const place=(type,n)=>{ let p=0,g=0; while(p<n&&g++<400){ const x=Math.floor(rng()*N),y=Math.floor(rng()*N);
         if((x===0&&y===0)||(x===N-1&&y===N-1)||b[y][x]!==EMPTY) continue; b[y][x]=type; p++; } };
-      place(WALL,4); place(GEM,5); place(SPIKE,5);
+      place(GEM,4); place(SPIKE,5);
       return b;
     }
-    function cellAt(b,x,y){ if(x<0||y<0||x>=N||y>=N) return WALL; return b[y][x]; }
-    // What the agent learns on: its position, the 4 neighbors (no diagonals),
-    // and its last move. Position makes the maze solvable; neighbors + last move
-    // are extra cues. (The STUDENT still only SEES the 4 neighbors — see drawObs.)
+    function cellAt(b,x,y){ if(x<0||y<0||x>=N||y>=N) return OFF; return b[y][x]; }
     function neighbors(b,ax,ay){
       return { up:cellAt(b,ax,ay-1), down:cellAt(b,ax,ay+1), left:cellAt(b,ax-1,ay), right:cellAt(b,ax+1,ay) };
     }
-    function stateKey(ax,ay,lastMove){ return ax+","+ay+","+(lastMove||"-"); }
+    // What the agent learns on: the 4 neighbor cell types (no diagonals) + its
+    // last 4 moves. No absolute position, so it must generalize across boards.
+    function stateKey(b,ax,ay,hist){
+      const nb=neighbors(b,ax,ay);
+      return [nb.up,nb.down,nb.left,nb.right, ...hist].join(",");
+    }
+    function pushHist(hist, action){ return [...hist.slice(1), AIDX[action]]; }
+    const HIST0=[-1,-1,-1,-1];
 
     // ---- Drawing -------------------------------------------------------------
     // reveal: "all" full view, or a {x,y} agent pos to reveal only its 4
@@ -258,11 +233,10 @@
     drawBoard(document.getElementById("example").getContext("2d"), makeBoard(4242), {x:0,y:0}, "all");
 
     // ---- Simulation core (shared by play, replay, training) ------------------
-    // Step the world once; returns {nx,ny,reward,done}.
     function simStep(b,a,action){
       const [dx,dy]=DCELL[action];
       let nx=a.x+dx, ny=a.y+dy;
-      if(cellAt(b,nx,ny)===WALL){ nx=a.x; ny=a.y; }
+      if(nx<0||ny<0||nx>=N||ny>=N){ nx=a.x; ny=a.y; }   // edge: stay put
       let r=STEP_COST, done=false, died=false, won=false;
       const h=cellAt(b,nx,ny);
       if(h===GEM){ r+=GEM_R; b[ny][nx]=EMPTY; }
@@ -270,44 +244,32 @@
       else if(h===GOAL){ r+=GOAL_R; done=true; won=true; }
       return { nx, ny, reward:r, done, died, won };
     }
-
-    // Q-learning helpers over stateKey(x,y,lastMove).
     function ensQ(Q,k){ if(!Q[k]) Q[k]={up:0,down:0,left:0,right:0}; return Q[k]; }
-    function greedyAct(Q,ax,ay,last){
-      const q=Q[stateKey(ax,ay,last)];
-      if(!q) return "up";
+    function greedyAct(Q,b,ax,ay,hist){
+      const q=Q[stateKey(b,ax,ay,hist)];
+      if(!q) return ACTIONS[Math.floor(Math.random()*4)];
       let best="up",bv=-Infinity; for(const a of ACTIONS) if(q[a]>bv){bv=q[a];best=a;} return best;
     }
 
-    // Run a greedy policy on the fixed learning board; return final score + reached.
-    function scoreGreedy(Q){
-      const b=makeBoard(LEARN_SEED); let a={x:0,y:0}, m=MAX_MOVES, s=0, last="-", reached=false;
-      while(m-->0){
-        const act=greedyAct(Q,a.x,a.y,last);
-        const o=simStep(b,a,act); s+=o.reward; a.x=o.nx; a.y=o.ny; last=act;
-        if(o.done){ reached=true; break; }
-      }
-      return { score:s, reached };
-    }
-
-    // ---- Player rounds (fixed learning board) --------------------------------
-    let roundIndex=0;
-    let allExperience=[];           // {x,y,last,action,reward} across all rounds
+    // ---- Player rounds (shuffled board each round) ---------------------------
+    let roundIndex=0;      // completed rounds
+    let reachedFlag=false; // has the player ever reached the goal?
     let cur=null;
 
     function renderRounds(){
       const host=document.getElementById("rounds"); const cells=[];
-      for(let i=0;i<TOTAL_ROUNDS;i++){
+      const shown=Math.max(TOTAL_ROUNDS, roundIndex + (cur&&!cur.done?1:0));
+      for(let i=0;i<shown;i++){
         const cls = i<roundIndex ? "done" : (i===roundIndex ? "active" : "");
         cells.push(`<span class="roundpill ${cls}">Round ${i+1}${i<roundIndex?" ✓":""}</span>`);
       }
       host.innerHTML=cells.join("");
-      document.getElementById("round-num").textContent=Math.min(roundIndex+1,TOTAL_ROUNDS);
-      document.getElementById("round-total").textContent=TOTAL_ROUNDS;
+      document.getElementById("round-num").textContent=roundIndex+1;
+      document.getElementById("round-total").textContent=Math.max(TOTAL_ROUNDS, roundIndex+1);
     }
 
     function startRound(){
-      cur = { board:makeBoard(LEARN_SEED), a:{x:0,y:0}, score:0, moves:MAX_MOVES, last:"-", done:false };
+      cur = { board:makeBoard(), a:{x:0,y:0}, score:0, moves:MAX_MOVES, hist:HIST0.slice(), done:false };
       renderRounds(); drawPlay(); drawObs(); updateHud();
       document.getElementById("play-feedback").textContent="";
       document.getElementById("play").focus();
@@ -316,113 +278,99 @@
     const playCtx=document.getElementById("play").getContext("2d");
     function drawPlay(){ drawBoard(playCtx, cur.board, cur.a, cur.a); } // reveal only 4 neighbors
     function drawObs(){
-      // Plus-shaped 3x3 with diagonals blanked out (the agent can't see them).
       const nb=neighbors(cur.board,cur.a.x,cur.a.y);
       const layout=[null,"up",null,"left","me","right",null,"down",null];
       document.getElementById("obs-grid").innerHTML=layout.map(slot=>{
         if(slot===null) return `<div class="ocell" style="background:#0b1220;border-color:#0b1220;"></div>`;
         if(slot==="me") return `<div class="ocell me">🙂</div>`;
-        return `<div class="ocell">${EMOJI[nb[slot]]}</div>`;
+        const v=nb[slot];
+        return `<div class="ocell">${v===OFF?"⛔":EMOJI[v]}</div>`;
       }).join("");
     }
     function updateHud(){
       const m=document.getElementById("moves-chip");
       m.textContent="Moves left: "+cur.moves;
-      m.className="chip"+(cur.moves<=5?" warn":"");
+      m.className="chip"+(cur.moves<=8?" warn":"");
       document.getElementById("score-chip").textContent="Score: "+cur.score.toFixed(1);
     }
 
     function playerStep(action){
       if(!cur || cur.done) return;
-      // record experience keyed by what the AGENT learns on (position+last move)
-      allExperience.push({ x:cur.a.x, y:cur.a.y, last:cur.last, action, reward:0, nx:0, ny:0, done:false });
-      const rec=allExperience[allExperience.length-1];
       const o=simStep(cur.board, cur.a, action);
-      rec.reward=o.reward; rec.nx=o.nx; rec.ny=o.ny; rec.done=o.done; rec.nlast=action;
-      cur.a.x=o.nx; cur.a.y=o.ny; cur.last=action; cur.score+=o.reward; cur.moves--;
+      cur.a.x=o.nx; cur.a.y=o.ny; cur.hist=pushHist(cur.hist,action);
+      cur.score+=o.reward; cur.moves--;
       drawPlay(); drawObs(); updateHud();
       if(o.won){ endRound("goal"); }
       else if(o.died){ endRound("died"); }
       else if(cur.moves<=0){ endRound("timeout"); }
     }
 
+    // Player is "done playing" once they've completed >=3 rounds AND reached the
+    // flag at least once.
+    function donePlaying(){ return roundIndex>=TOTAL_ROUNDS && reachedFlag; }
+
     function endRound(outcome){
       cur.done=true;
+      if(outcome==="goal") reachedFlag=true;
+      roundIndex++;
       const fb=document.getElementById("play-feedback");
-      fb.innerHTML = outcome==="goal"
-        ? `<span class="pill good">Reached the goal!</span> Round score: <b>${cur.score.toFixed(1)}</b>.`
+      const head = outcome==="goal"
+        ? `<span class="pill good">🚩 You reached the flag!</span> Score: <b>${cur.score.toFixed(1)}</b>.`
         : outcome==="died"
-          ? `<span class="pill bad">💀 You hit a spike — instant death.</span> Round score: <b>${cur.score.toFixed(1)}</b>. Those moves still taught the agent what to avoid.`
-          : `<span class="pill bad">Out of moves.</span> Round score: <b>${cur.score.toFixed(1)}</b>.`;
-      roundIndex++; renderRounds();
-      show("sec-policy");
-      trainAndReplayPolicy();
-      if(roundIndex < TOTAL_ROUNDS){
-        fb.innerHTML += ` &nbsp; <button class="btn primary" id="next-round">Play round ${roundIndex+1} ▶</button>`;
+          ? `<span class="pill bad">💀 A red triangle was instant death.</span> Score: <b>${cur.score.toFixed(1)}</b>.`
+          : `<span class="pill bad">Out of moves.</span> Score: <b>${cur.score.toFixed(1)}</b>.`;
+      renderRounds();
+      if(donePlaying()){
+        fb.innerHTML = head + ` &nbsp; <b>Nice — you learned to play with no rulebook. Now watch a real agent do the same.</b>`;
+        show("sec-scratch");
+        setTimeout(()=>document.getElementById("sec-scratch").scrollIntoView({behavior:"smooth",block:"start"}),200);
+      } else {
+        const need = roundIndex<TOTAL_ROUNDS
+          ? `Round ${roundIndex+1} of ${TOTAL_ROUNDS}.`
+          : `Keep going until you reach the 🚩 flag at least once.`;
+        fb.innerHTML = head + ` &nbsp; ${need} &nbsp; <button class="btn primary" id="next-round">Next round ▶</button>`;
         document.getElementById("next-round").onclick=()=>{ startRound();
           document.getElementById("play").scrollIntoView({behavior:"smooth",block:"center"}); };
-      } else {
-        fb.innerHTML += ` &nbsp; <b>All rounds done — see how your policy learned below.</b>`;
-        show("sec-scratch");
-        document.getElementById("sec-scratch").scrollIntoView({behavior:"smooth",block:"start"});
       }
       setHeight();
     }
 
-    // ---- Train a policy from the player's experience -------------------------
-    function trainFromExperience(experience, epochs){
-      const Q={}; const alpha=0.4, gamma=0.95;
-      for(let e=0;e<epochs;e++){
-        for(const t of experience){
-          const qk=ensQ(Q, stateKey(t.x,t.y,t.last));
-          const fut = t.done ? 0 : (()=>{ const nq=ensQ(Q, stateKey(t.nx,t.ny,t.nlast||"-"));
-            return Math.max(nq.up,nq.down,nq.left,nq.right); })();
-          qk[t.action]+=alpha*(t.reward+gamma*fut-qk[t.action]);
-        }
-      }
-      return Q;
+    function renderLineChart(hostId, data, opts){
+      // data: array of {x, y}; draws a simple SVG line + zero baseline.
+      const host=document.getElementById(hostId);
+      const W=320,H=150,pad=24;
+      const xs=data.map(d=>d.x), ys=data.map(d=>d.y);
+      const xmin=Math.min(...xs), xmax=Math.max(...xs,1);
+      const ymin=Math.min(0,...ys), ymax=Math.max(1,...ys);
+      const sx=x=>pad+(W-2*pad)*((x-xmin)/((xmax-xmin)||1));
+      const sy=y=>H-pad-(H-2*pad)*((y-ymin)/((ymax-ymin)||1));
+      const path=data.map((d,i)=>(i?"L":"M")+sx(d.x).toFixed(1)+" "+sy(d.y).toFixed(1)).join(" ");
+      const zeroY=sy(0);
+      host.innerHTML=`<svg width="100%" viewBox="0 0 ${W} ${H}" style="background:#0b1220;border-radius:8px;">
+        <line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="#334155" stroke-dasharray="3 3"/>
+        <path d="${path}" fill="none" stroke="${opts.color||'#60a5fa'}" stroke-width="2.5"/>
+        ${data.map(d=>`<circle cx="${sx(d.x)}" cy="${sy(d.y)}" r="2.5" fill="${opts.color||'#60a5fa'}"/>`).join("")}
+        <text x="${pad}" y="${H-6}" fill="#94a3b8" font-size="10">${opts.xlabel||""}</text>
+        <text x="${W-pad}" y="${H-6}" fill="#94a3b8" font-size="10" text-anchor="end">${xmax}</text>
+        <text x="4" y="${pad}" fill="#94a3b8" font-size="10">${Math.round(ymax)}</text>
+        <text x="4" y="${zeroY-2}" fill="#64748b" font-size="9">0</text>
+      </svg>`;
     }
 
-    const policyScores=[];
-    function trainAndReplayPolicy(){
-      const Q=trainFromExperience(allExperience, 250);
-      const res=scoreGreedy(Q);
-      policyScores.push(res.score);
-      renderBars("policy-bars", policyScores.map((v,i)=>({v, l:"R"+(i+1)})));
-      const note=document.getElementById("policy-note");
-      if(policyScores.length===1) note.innerHTML="One round in. The policy only knows the path you actually walked — anywhere else, it's guessing.";
-      else if(policyScores[policyScores.length-1] >= policyScores[0]) note.innerHTML="The more rounds you play, the more of the maze your policy has seen — so it makes better choices. Watch the bar climb.";
-      else note.innerHTML="More experience usually helps. Play another round to fill in the gaps.";
-      animatePolicy(document.getElementById("policy-replay"), Q, document.getElementById("policy-score"));
-      setHeight();
-    }
-
-    // Animate a greedy Q policy on the fixed board (full view so they can watch).
+    // ---- Animate a greedy Q policy on a fresh shuffled board -----------------
     function animatePolicy(canvas, Q, pill, doneCb){
       const ctx=canvas.getContext("2d");
-      const b=makeBoard(LEARN_SEED); let a={x:0,y:0}, s=0, m=MAX_MOVES, last="-";
+      const b=makeBoard(); let a={x:0,y:0}, s=0, m=MAX_MOVES, hist=HIST0.slice();
       drawBoard(ctx,b,a,"all");
       const tick=()=>{
-        if(m<=0){ pill.textContent=s.toFixed(0)+" pts"; if(doneCb)doneCb(s); return; }
-        const act=greedyAct(Q,a.x,a.y,last);
-        const o=simStep(b,a,act); s+=o.reward; a.x=o.nx; a.y=o.ny; last=act; m--;
+        if(m<=0){ pill.textContent=s.toFixed(0)+" pts"; if(doneCb)doneCb(s,false); return; }
+        const act=greedyAct(Q,b,a.x,a.y,hist);
+        const o=simStep(b,a,act); s+=o.reward; a.x=o.nx; a.y=o.ny; hist=pushHist(hist,act); m--;
         drawBoard(ctx,b,a,"all"); pill.textContent=s.toFixed(0)+" pts";
-        if(o.done){ pill.textContent=s.toFixed(0)+" pts "+(o.won?"🚩":"💀"); if(doneCb)doneCb(s); return; }
-        setTimeout(tick,180);
+        if(o.done){ pill.textContent=s.toFixed(0)+" pts "+(o.won?"🚩":"💀"); if(doneCb)doneCb(s,o.won); return; }
+        setTimeout(tick,160);
       };
       setTimeout(tick,250);
-    }
-
-    function renderBars(hostId, data){
-      const host=document.getElementById(hostId);
-      const max=Math.max(10, ...data.map(d=>Math.abs(d.v)));
-      host.innerHTML=data.map(d=>{
-        const h=Math.max(4, Math.round(Math.abs(d.v)/max*100));
-        const color=d.v>=0?"var(--accent)":"var(--bad)";
-        return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:120px;">
-          <div class="bar" style="height:${h}px;background:${color};">
-            <span class="v">${d.v.toFixed(0)}</span><span class="l">${d.l}</span></div></div>`;
-      }).join("");
     }
 
     // ---- From-scratch RL (live) ----------------------------------------------
@@ -430,45 +378,53 @@
     function runScratchLearning(){
       document.getElementById("scratch-btn").disabled=true;
       const Q={}; const alpha=0.3, gamma=0.95;
-      const scratchScores=[]; const milestones=[1,150,400,1000];
-      let ep=0; const TOTAL=1000;
+      const curve=[];                 // {x:episode, y:avg score}
+      let ep=0; const TOTAL=8000;
       const epEl=document.getElementById("scratch-ep");
       const noteEl=document.getElementById("scratch-note");
 
       function trainEpisode(eps){
-        const b=makeBoard(LEARN_SEED); let a={x:0,y:0}, m=MAX_MOVES, last="-";
+        const b=makeBoard(); let a={x:0,y:0}, m=MAX_MOVES, hist=HIST0.slice();
         while(m-->0){
-          const k=stateKey(a.x,a.y,last); const qk=ensQ(Q,k);
+          const qk=ensQ(Q, stateKey(b,a.x,a.y,hist));
           let act; if(Math.random()<eps) act=ACTIONS[Math.floor(Math.random()*4)];
           else { let bv=-Infinity; act="up"; for(const aa of ACTIONS) if(qk[aa]>bv){bv=qk[aa];act=aa;} }
           const o=simStep(b,a,act);
-          const nq=ensQ(Q, stateKey(o.nx,o.ny,act));
+          const nh=pushHist(hist,act);
+          const nq=ensQ(Q, stateKey(b,o.nx,o.ny,nh));
           const fut=o.done?0:Math.max(nq.up,nq.down,nq.left,nq.right);
           qk[act]+=alpha*(o.reward+gamma*fut-qk[act]);
-          a.x=o.nx; a.y=o.ny; last=act; if(o.done)break;
+          a.x=o.nx; a.y=o.ny; hist=nh; if(o.done)break;
         }
+      }
+      // average greedy score over many fresh boards (generalization, not memorization)
+      function evalAgent(){
+        let tot=0,won=0,K=40;
+        for(let i=0;i<K;i++){ const b=makeBoard(); let a={x:0,y:0},m=MAX_MOVES,s=0,hist=HIST0.slice();
+          while(m-->0){ const act=greedyAct(Q,b,a.x,a.y,hist); const o=simStep(b,a,act);
+            s+=o.reward; a.x=o.nx; a.y=o.ny; hist=pushHist(hist,act); if(o.done){if(o.won)won++;break;} }
+          tot+=s; }
+        return { avg:tot/K, winPct:Math.round(won/K*100) };
       }
 
       function loop(){
         if(ep>=TOTAL){
-          noteEl.innerHTML="From <b>random flailing</b> to <b>finding the goal</b> — no examples, just trial, error, and reward. That's the same loop you ran by hand, automated.";
-          show("sec-done"); document.getElementById("sec-done").scrollIntoView({behavior:"smooth",block:"start"});
+          noteEl.innerHTML="From <b>random flailing</b> to <b>solving boards it has never seen</b> — no rulebook, no examples, just trial, error, and reward. The same way you just learned.";
+          show("sec-done"); setTimeout(()=>document.getElementById("sec-done").scrollIntoView({behavior:"smooth",block:"start"}),200);
           setHeight(); return;
         }
-        const eps=Math.max(0.05, 1 - ep/600);
-        const batch = ep===0?1:40;
+        const eps=Math.max(0.08, 1 - ep/5000);
+        const batch = ep===0?1:400;
         for(let i=0;i<batch;i++){ trainEpisode(eps); ep++; }
         epEl.textContent="Episode "+ep;
-        if(milestones.some(ms=>ms<=ep && ms>ep-batch)){
-          const res=scoreGreedy(Q);
-          scratchScores.push({v:res.score, l:"ep "+ep});
-          renderBars("scratch-bars", scratchScores);
-          if(scratchScores.length===1) noteEl.innerHTML="Episode 1: basically random — bumping into walls and spikes, missing the goal.";
-          else if(res.reached) noteEl.innerHTML="It's reaching the goal on its own now. Each episode it remembers which actions paid off and leans into them.";
-          else noteEl.innerHTML="Improving — the score is climbing as it learns which way to go.";
-        }
+        const res=evalAgent();
+        curve.push({x:ep, y:res.avg});
+        renderLineChart("scratch-graph", curve, {color:"#60a5fa", xlabel:"episodes →"});
+        if(curve.length<=1) noteEl.innerHTML="Episode 1: basically random — it bumps into spikes and rarely finds the flag.";
+        else if(res.winPct>=50) noteEl.innerHTML=`It now reaches the flag on about <b>${res.winPct}%</b> of brand-new boards. It learned a strategy, not a memorized path.`;
+        else noteEl.innerHTML=`Improving — the reward curve is climbing as it learns which moves pay off (${res.winPct}% of new boards solved so far).`;
         animatePolicy(document.getElementById("scratch-replay"), Q, document.getElementById("scratch-score"));
-        setTimeout(loop, 650);
+        setTimeout(loop, 600);
       }
       loop();
     }

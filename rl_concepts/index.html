@@ -89,6 +89,21 @@
       20% { opacity:1; transform:translateX(-50%) translateY(0) scale(1.1); }
       100% { opacity:0; transform:translateX(-50%) translateY(-34px) scale(1); }
     }
+
+    /* Policy-map rule rows: observation -> action */
+    .policy-rule {
+      display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+      border:1px solid var(--line); border-radius:10px; padding:10px 14px; margin:8px 0; background:#fcfdff;
+    }
+    .mini-obs { display:grid; grid-template-columns:repeat(3,28px); grid-gap:3px; }
+    .mini-cell { width:28px; height:28px; border-radius:5px; border:1px solid #e4e7ec; background:#fff;
+      display:flex; align-items:center; justify-content:center; font-size:0.95rem; }
+    .mini-cell.me { background:#dbeafe; border-color:var(--accent); }
+    .mini-cell.blank { background:#f8fafc; border-color:#f1f5f9; }
+    .rule-arrow { color:var(--muted); font-weight:800; font-size:1.2rem; }
+    .rule-action { font-weight:800; font-size:1.05rem; }
+    .rule-action .glyph { font-size:1.4rem; margin-right:6px; }
+    .rule-why { font-size:0.88rem; color:var(--muted); }
   </style>
 </head>
 <body>
@@ -169,6 +184,39 @@
           <p class="note" id="scratch-note" style="margin-top:10px;"></p>
           <button class="btn primary big" id="scratch-btn">Let it learn ▶</button>
         </div>
+      </div>
+    </div>
+
+    <!-- POLICY MAP -->
+    <div class="section hidden" id="sec-policymap">
+      <div class="kicker">What it actually learned</div>
+      <h3>The policy: a mapping from observation to action</h3>
+      <p class="lead">A <b>policy</b> is just a lookup: <b>&ldquo;when I see <i>this</i>, do
+      <i>that</i>.&rdquo;</b> For this game, that means:</p>
+      <div class="row">
+        <div class="obs-card" style="flex:1; min-width:240px; background:#fff; color:var(--ink);">
+          <h4 style="color:var(--ink);">👁️ The observation</h4>
+          <p class="note" style="color:var(--muted);">Everything the agent senses each step:</p>
+          <ul style="margin:6px 0 0 1.1rem; padding:0; font-size:0.96rem; line-height:1.6;">
+            <li>the cell <b>above, below, left, right</b> (gem 💎, spike 🔺, flag 🚩, empty, or edge ⛔)</li>
+            <li>its <b>last 4 moves</b> (so it can tell it's not just circling)</li>
+          </ul>
+          <p class="note" style="color:var(--muted);">That's it — no map, no position. Same idea as
+          a CartPole agent seeing only cart position, velocity, pole angle, and spin.</p>
+        </div>
+        <div class="obs-card" style="flex:1; min-width:240px; background:#fff; color:var(--ink);">
+          <h4 style="color:var(--ink);">🎮 The actions</h4>
+          <p class="note" style="color:var(--muted);">The four choices it can make:</p>
+          <div style="font-size:1.6rem; letter-spacing:.3rem;">⬆️ ⬇️ ⬅️ ➡️</div>
+          <p class="note" style="color:var(--muted);">The policy's whole job is to pick one of these
+          for each observation. Below are real entries from the table it just learned:</p>
+        </div>
+      </div>
+      <div style="font-weight:800; margin:14px 0 6px;">A few rules from the learned policy:</div>
+      <div id="policy-rules"></div>
+      <p class="note" id="policymap-note" style="margin-top:10px;"></p>
+      <div class="center" style="margin-top:14px;">
+        <button class="btn primary big" id="policymap-continue">That makes sense — continue ▶</button>
       </div>
     </div>
 
@@ -472,8 +520,9 @@
         setHeight();
         const showcase=pickSolvableBoard(Q, 8);
         animatePolicy(document.getElementById("scratch-replay"), Q, document.getElementById("scratch-score"), 320, ()=>{
-          noteEl.innerHTML="From <b>random flailing</b> to <b>solving boards it has never seen</b> — no rulebook, no examples, just trial, error, and reward. The same way you just learned.";
-          show("sec-done"); setTimeout(()=>document.getElementById("sec-done").scrollIntoView({behavior:"smooth",block:"start"}),300);
+          noteEl.innerHTML="That's the trained policy in action. Below: what that policy actually <i>is</i>.";
+          renderPolicyMap(Q);
+          show("sec-policymap"); setTimeout(()=>document.getElementById("sec-policymap").scrollIntoView({behavior:"smooth",block:"start"}),300);
           setHeight();
         }, showcase);
       }
@@ -496,6 +545,64 @@
       }
       loop();
     }
+
+    // ---- Policy map: harvest REAL rules straight from the learned Q-table ----
+    function renderPolicyMap(Q){
+      const ACT_GLYPH={up:"⬆️",down:"⬇️",left:"⬅️",right:"➡️"};
+      const ACT_NAME={up:"go up",down:"go down",left:"go left",right:"go right"};
+      const CELL_GLYPH={[GEM]:"💎",[SPIKE]:"🔺",[GOAL]:"🚩",[EMPTY]:"",[OFF]:"⛔",};
+
+      function bestAction(q){ let bv=-Infinity,b="up"; for(const a of ACTIONS) if(q[a]>bv){bv=q[a];b=a;} return b; }
+      function whyFor(nb, act){
+        if(nb[act]===GOAL) return "steps onto the flag";
+        if(nb[act]===GEM) return "grabs a gem";
+        if(nb[act]===SPIKE) return "(!) toward a spike";
+        // does it avoid a neighboring spike?
+        const spikes=ACTIONS.filter(a=>nb[a]===SPIKE);
+        if(spikes.length && nb[act]!==SPIKE) return "avoids the spike";
+        const gems=ACTIONS.filter(a=>nb[a]===GEM);
+        if(gems.length && nb[act]===GEM) return "goes for the gem";
+        return "heads toward the goal";
+      }
+
+      // Collect learned states, prefer ones with a clear winner and an
+      // interesting neighbor (gem/spike/flag), so the examples teach something.
+      const keys=Object.keys(Q);
+      const scored=keys.map(k=>{
+        const parts=k.split(",").map(Number);
+        const nb={ up:parts[0], down:parts[1], left:parts[2], right:parts[3] };
+        const q=Q[k]; const vals=ACTIONS.map(a=>q[a]).sort((a,b)=>b-a);
+        const margin=vals[0]-vals[1];                 // confidence
+        const interesting=[nb.up,nb.down,nb.left,nb.right].some(c=>c===GEM||c===SPIKE||c===GOAL);
+        return { k, nb, q, margin, interesting };
+      }).filter(s=>s.margin>0.3);
+      scored.sort((a,b)=> (b.interesting-a.interesting) || (b.margin-a.margin));
+
+      // de-dup by neighbor pattern so rows look varied
+      const seen=new Set(); const picks=[];
+      for(const s of scored){ const sig=[s.nb.up,s.nb.down,s.nb.left,s.nb.right].join("|");
+        if(seen.has(sig)) continue; seen.add(sig); picks.push(s); if(picks.length>=6) break; }
+
+      const rows=picks.map(s=>{
+        const act=bestAction(s.q);
+        const slot=(pos)=> pos==="me" ? `<div class="mini-cell me">🙂</div>`
+          : pos===null ? `<div class="mini-cell blank"></div>`
+          : `<div class="mini-cell">${CELL_GLYPH[s.nb[pos]]||""}</div>`;
+        const grid=[null,"up",null,"left","me","right",null,"down",null].map(slot).join("");
+        return `<div class="policy-rule">
+          <div class="mini-obs">${grid}</div>
+          <span class="rule-arrow">→</span>
+          <span class="rule-action"><span class="glyph">${ACT_GLYPH[act]}</span>${ACT_NAME[act]}</span>
+          <span class="rule-why">— ${whyFor(s.nb, act)}</span>
+        </div>`;
+      }).join("");
+      document.getElementById("policy-rules").innerHTML = rows ||
+        `<div class="note">The agent's table is still sparse — let it train a bit longer for clearer rules.</div>`;
+      document.getElementById("policymap-note").innerHTML=`These rows are pulled straight from the agent's learned table (it holds <b>${keys.length.toLocaleString()}</b> situations in all). A policy is nothing more than this: a best action for every observation.`;
+    }
+    document.getElementById("policymap-continue").onclick=()=>{
+      show("sec-done"); document.getElementById("sec-done").scrollIntoView({behavior:"smooth",block:"start"}); setHeight();
+    };
 
     // ---- Input + start -------------------------------------------------------
     const playCanvas=document.getElementById("play");

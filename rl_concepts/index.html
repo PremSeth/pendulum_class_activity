@@ -394,19 +394,40 @@
     }
 
     // ---- Animate a greedy Q policy on a fresh shuffled board -----------------
-    function animatePolicy(canvas, Q, pill, doneCb){
+    // speed = ms per step (lower = faster). doneCb(score, won) fires at the end.
+    // Find a fresh board the greedy policy actually solves (so the showcase
+    // round ends at the flag, not an unlucky early death). Falls back to any
+    // board after a few tries.
+    function pickSolvableBoard(Q, tries){
+      tries = tries || 1;
+      let board=null;
+      for(let t=0;t<tries;t++){
+        const b=makeBoard(); let a={x:0,y:0}, m=MAX_MOVES, hist=HIST0.slice(), won=false;
+        const probe=b.map(r=>r.slice());
+        while(m-->0){ const act=greedyAct(Q,probe,a.x,a.y,hist); const o=simStep(probe,a,act);
+          a.x=o.nx; a.y=o.ny; hist=pushHist(hist,act); if(o.done){won=o.won;break;} }
+        board=b; if(won) return b;
+      }
+      return board;
+    }
+
+    let animToken=0;
+    function animatePolicy(canvas, Q, pill, speed, doneCb, board){
+      const myToken=++animToken;          // cancel any earlier animation on this canvas
+      speed = speed || 160;
       const ctx=canvas.getContext("2d");
-      const b=makeBoard(); let a={x:0,y:0}, s=0, m=MAX_MOVES, hist=HIST0.slice();
+      const b=board || makeBoard(); let a={x:0,y:0}, s=0, m=MAX_MOVES, hist=HIST0.slice();
       drawBoard(ctx,b,a,"all");
       const tick=()=>{
+        if(myToken!==animToken) return;   // a newer animation superseded this one
         if(m<=0){ pill.textContent=s.toFixed(0)+" pts"; if(doneCb)doneCb(s,false); return; }
         const act=greedyAct(Q,b,a.x,a.y,hist);
         const o=simStep(b,a,act); s+=o.reward; a.x=o.nx; a.y=o.ny; hist=pushHist(hist,act); m--;
         drawBoard(ctx,b,a,"all"); pill.textContent=s.toFixed(0)+" pts";
         if(o.done){ pill.textContent=s.toFixed(0)+" pts "+(o.won?"🚩":"💀"); if(doneCb)doneCb(s,o.won); return; }
-        setTimeout(tick,160);
+        setTimeout(tick,speed);
       };
-      setTimeout(tick,250);
+      setTimeout(tick, Math.min(250,speed));
     }
 
     // ---- From-scratch RL (live) ----------------------------------------------
@@ -443,12 +464,22 @@
         return { avg:tot/K, winPct:Math.round(won/K*100) };
       }
 
-      function loop(){
-        if(ep>=TOTAL){
+      function finishWithFullRound(){
+        // Training done: let the trained agent play one full round at normal,
+        // watchable speed (no interruptions) before the handoff.
+        epEl.textContent="Trained ("+TOTAL+" episodes)";
+        noteEl.innerHTML="Done training. <b>Now watch it play one full round at normal speed</b> on a board it has never seen.";
+        setHeight();
+        const showcase=pickSolvableBoard(Q, 8);
+        animatePolicy(document.getElementById("scratch-replay"), Q, document.getElementById("scratch-score"), 320, ()=>{
           noteEl.innerHTML="From <b>random flailing</b> to <b>solving boards it has never seen</b> — no rulebook, no examples, just trial, error, and reward. The same way you just learned.";
-          show("sec-done"); setTimeout(()=>document.getElementById("sec-done").scrollIntoView({behavior:"smooth",block:"start"}),200);
-          setHeight(); return;
-        }
+          show("sec-done"); setTimeout(()=>document.getElementById("sec-done").scrollIntoView({behavior:"smooth",block:"start"}),300);
+          setHeight();
+        }, showcase);
+      }
+
+      function loop(){
+        if(ep>=TOTAL){ finishWithFullRound(); return; }
         const eps=Math.max(0.08, 1 - ep/5000);
         const batch = ep===0?1:400;
         for(let i=0;i<batch;i++){ trainEpisode(eps); ep++; }
@@ -459,7 +490,8 @@
         if(curve.length<=1) noteEl.innerHTML="Episode 1: basically random — it bumps into spikes and rarely finds the flag.";
         else if(res.winPct>=50) noteEl.innerHTML=`It now reaches the flag on about <b>${res.winPct}%</b> of brand-new boards. It learned a strategy, not a memorized path.`;
         else noteEl.innerHTML=`Improving — the reward curve is climbing as it learns which moves pay off (${res.winPct}% of new boards solved so far).`;
-        animatePolicy(document.getElementById("scratch-replay"), Q, document.getElementById("scratch-score"));
+        // quick snapshot replay during training
+        animatePolicy(document.getElementById("scratch-replay"), Q, document.getElementById("scratch-score"), 90);
         setTimeout(loop, 600);
       }
       loop();

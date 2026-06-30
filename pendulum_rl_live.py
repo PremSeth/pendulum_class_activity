@@ -1918,6 +1918,71 @@ def build_controlled_demo_run(
     }
 
 
+def _render_policy_no_terminate(result: TrainingResult, seed: int) -> tuple[bytes, float]:
+    """Render a trained policy in an environment where the pole is allowed to
+    fall without ending the episode, and report its upright fraction. Lets us
+    show a good agent and a lazy agent side by side in the same world."""
+    import copy
+
+    eval_result = copy.copy(result)
+    eval_settings = copy.copy(result.settings)
+    eval_settings.terminate_on_angle = False
+    eval_result.settings = eval_settings
+    _, _, _, frames = evaluate_policy(eval_result, seed=seed, render=True, sleep_limit=180)
+    upright = _measure_upright_fraction(eval_result, seed=seed + 5)
+    return (frames_to_gif(frames, fps=30) if frames else b""), upright
+
+
+def build_lazy_comparison(*, seed: int = 21) -> dict[str, Any]:
+    """For the lazy-agent step: train a good (+1 alive) policy and a lazy
+    (+10 alive) policy, then render BOTH in the same fall-allowed environment so
+    students can directly compare a balancing agent with one that gives up."""
+    base_penalties = [
+        {"signal": "cart_position", "factor": -1.0, "transform": "abs", "scale": "unit"},
+        {"signal": "pole_angular_velocity", "factor": -1.0, "transform": "abs", "scale": "unit"},
+    ]
+    good_reward = {"reward_terms": [{"signal": "alive", "factor": 1.0, "scale": "unit"}] + base_penalties}
+    lazy_reward = {"reward_terms": [{"signal": "alive", "factor": 10.0, "scale": "unit"}] + base_penalties}
+
+    def train(reward: dict[str, Any], terminate: bool) -> TrainingResult:
+        settings = TrainSettings(
+            algorithm="Q-learning",
+            episodes=REWARD_LESSON_EPISODES,
+            max_steps=DEMO_MAX_STEPS,
+            learning_rate=REWARD_LESSON_LEARNING_RATE,
+            gamma=DEMO_GAMMA,
+            epsilon=DEMO_EPSILON,
+            epsilon_min=REWARD_LESSON_EPSILON_MIN,
+            seed=seed,
+            q_bins_per_feature=REWARD_LESSON_Q_BINS,
+            observation_features=DEFAULT_OBSERVATION_FEATURES,
+            action_forces=ACTION_PRESETS["Standard left/right"],
+            initial_state=(0.0, 0.0, 0.0, 0.0),
+            terminate_on_angle=terminate,
+        )
+        return train_q_learning(settings, reward, label="Demo")
+
+    # Good agent learned WITH the fall cutoff (step 2); lazy agent learned with
+    # the cutoff removed and a huge alive bonus (step 3).
+    good_gif, good_up = _render_policy_no_terminate(train(good_reward, True), seed + 200)
+    lazy_gif, lazy_up = _render_policy_no_terminate(train(lazy_reward, False), seed + 200)
+    return {
+        "version": CONTROLLED_DEMO_VERSION,
+        "good_gif": good_gif,
+        "good_upright": good_up,
+        "lazy_gif": lazy_gif,
+        "lazy_upright": lazy_up,
+    }
+
+
+def cached_lazy_comparison(st: Any, *, seed: int = 21) -> dict[str, Any]:
+    cache = st.session_state.setdefault("controlled_lazy_comparison_cache", {})
+    key = (CONTROLLED_DEMO_VERSION, seed)
+    if key not in cache:
+        cache[key] = build_lazy_comparison(seed=seed)
+    return dict(cache[key])
+
+
 def _measure_upright_fraction(result: TrainingResult, seed: int) -> float:
     """Fraction of a (non-rendered) evaluation episode the pole stays near
     upright (|angle| < ~12 degrees). Useful when the episode does not end on a
@@ -2725,6 +2790,83 @@ def check_reward_for_stage(
     return True, ""
 
 
+def render_reward_howto(st: Any) -> None:
+    """Quick illustrated guide: how to make a term negative and how to wrap it
+    in absolute value, shown right before the design activity."""
+    st.markdown(
+        """
+        <style>
+        .howto-card {
+            border: 1px solid #d0d5dd;
+            border-radius: 12px;
+            background: #f9fafb;
+            padding: 1rem 1.2rem;
+            margin: 0.6rem 0 1rem;
+        }
+        .howto-card h4 { margin: 0 0 0.6rem; font-size: 1.15rem; color: #101828; }
+        .howto-step {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            padding: 0.55rem 0;
+            border-top: 1px dashed #e4e7ec;
+        }
+        .howto-step:first-of-type { border-top: none; }
+        .howto-num {
+            flex: 0 0 auto;
+            width: 1.6rem; height: 1.6rem;
+            border-radius: 999px;
+            background: #2563eb; color: #fff;
+            font-weight: 800; font-size: 0.9rem;
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .howto-text { font-size: 1rem; color: #344054; }
+        .howto-pill {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            background: #ffffff; border: 1px solid #98a2b3; border-radius: 8px;
+            padding: 0.2rem 0.5rem; font-weight: 700; color: #182230; font-size: 0.92rem;
+            white-space: nowrap;
+        }
+        .howto-pill.neg { border-color: #f04438; color: #b42318; background: #fef3f2; }
+        .howto-pill.abs { border-color: #2563eb; color: #1d4ed8; background: #eff6ff; }
+        .howto-arrow { color: #667085; font-weight: 800; font-size: 1.2rem; }
+        </style>
+        <div class="howto-card">
+            <h4>Quick guide: shaping a reward term</h4>
+            <div class="howto-step">
+                <span class="howto-num">1</span>
+                <span class="howto-text">Drag a signal into the equation. It starts with a
+                factor of <span class="howto-pill">+1</span>.</span>
+            </div>
+            <div class="howto-step">
+                <span class="howto-num">2</span>
+                <span class="howto-text"><strong>Make it a penalty</strong> by typing a negative
+                number in its factor box:</span>
+                <span class="howto-pill">1 &times; pole angle</span>
+                <span class="howto-arrow">&rarr;</span>
+                <span class="howto-pill neg">&minus;1 &times; pole angle</span>
+            </div>
+            <div class="howto-step">
+                <span class="howto-num">3</span>
+                <span class="howto-text"><strong>Count both directions the same</strong> by
+                dragging the <span class="howto-pill abs">abs( )</span> block <em>on top of</em>
+                an existing term:</span>
+                <span class="howto-pill neg">&minus;1 &times; pole angle</span>
+                <span class="howto-arrow">&rarr;</span>
+                <span class="howto-pill neg">&minus;1 &times; | pole angle |</span>
+            </div>
+            <div class="howto-step">
+                <span class="howto-num">4</span>
+                <span class="howto-text">Now the term is most when the value is 0 and drops as it
+                moves either way &mdash; left or right, leaning or spinning, costs the same.</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_reward_design_exercise(st: Any) -> None:
     """Staged reward-design lesson: penalties-only fails, +alive fixes it, too
     much alive makes the agent lazy."""
@@ -2899,13 +3041,16 @@ def render_reward_design_exercise(st: Any) -> None:
                 f' balanced for <strong>{score}</strong> steps (out of {DEMO_MAX_STEPS}).</div>',
                 unsafe_allow_html=True,
             )
-        st.image(reward_run["gif_bytes"], width="stretch")
+        # For the lazy run we show the good-vs-lazy comparison below instead of a
+        # single clip, so skip the standalone gif here.
+        if not no_early_end:
+            st.image(reward_run["gif_bytes"], width="stretch")
 
         # Training curve: the total reward the agent collected each episode — the
         # quantity it is actually trying to maximize. This is what reveals the
         # consequences of the reward function you wrote.
         curve = reward_run.get("reward_curve")
-        if isinstance(curve, list) and curve:
+        if isinstance(curve, list) and curve and not no_early_end:
             st.caption(
                 "Total reward per episode over training (this is what the agent is"
                 " maximizing — watch whether your reward pushes it toward balancing):"
@@ -2926,6 +3071,32 @@ def render_reward_design_exercise(st: Any) -> None:
                 " cutoff, or make the bonus so large the penalties stop mattering, and the agent"
                 " gets paid for doing nothing — so it does nothing."
             )
+            # Side-by-side: the good +1-alive agent vs the lazy +10 agent, both
+            # rolled out in the SAME fall-allowed world.
+            with st.spinner("Comparing the +1 alive agent and the lazy agent..."):
+                comparison = cached_lazy_comparison(st, seed=21)
+            st.markdown(
+                "**Same environment, both allowed to fall — compare them:**"
+            )
+            good_col, lazy_col = st.columns(2)
+            with good_col:
+                st.markdown(
+                    f'<div class="reward-slide-note"><strong>+1 alive</strong> (step 2):'
+                    f' upright <strong>{int(round(comparison["good_upright"] * 100))}%</strong>'
+                    f' of the time — it keeps balancing.</div>',
+                    unsafe_allow_html=True,
+                )
+                if comparison.get("good_gif"):
+                    st.image(comparison["good_gif"], width="stretch")
+            with lazy_col:
+                st.markdown(
+                    f'<div class="reward-slide-note"><strong>+10 alive</strong> (lazy):'
+                    f' upright <strong>{int(round(comparison["lazy_upright"] * 100))}%</strong>'
+                    f' of the time — it lets the pole hang.</div>',
+                    unsafe_allow_html=True,
+                )
+                if comparison.get("lazy_gif"):
+                    st.image(comparison["lazy_gif"], width="stretch")
         elif run_alive <= 0 and score < 80:
             st.warning(
                 "Look at the reward curve: it stays **negative and never climbs**. With an"
@@ -3171,6 +3342,7 @@ def render_reward_slideshow_page(st: Any) -> None:
         unsafe_allow_html=True,
     )
 
+    render_reward_howto(st)
     render_reward_design_exercise(st)
 
     st.markdown(

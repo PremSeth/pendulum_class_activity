@@ -2265,7 +2265,11 @@ def render_observation_slideshow_page(st: Any) -> None:
             " &lsquo;balance as long as possible,&rsquo; pole <em>velocity</em> is almost as"
             " useful as pole <em>angle</em>. The pole is falling in whatever direction it is"
             " rotating, so the agent can just learn to push the cart toward the pole&rsquo;s spin"
-            " to catch it &mdash; without ever being told the exact angle. The best observation"
+            " to catch it &mdash; without ever being told the exact angle. Look back at step 2:"
+            " you took pole angle <em>out</em>, and the agent struggled. But if you had left"
+            " <strong>pole velocity</strong> in, it might have balanced anyway, because velocity"
+            " carries much of the same &lsquo;which way is it tipping?&rsquo; information. (Try"
+            " it: remove pole angle but keep pole velocity.) The best observation"
             " set depends on the task, not just on how much information you can pile on.<br><br>"
             "The <strong>right</strong> observations matter more than the <strong>most</strong>"
             " observations. Continue to learn about <strong>actions</strong>.",

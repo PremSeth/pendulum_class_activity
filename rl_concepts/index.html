@@ -128,15 +128,26 @@
     <!-- POLICY IMPROVES -->
     <div class="section hidden" id="sec-policy">
       <div class="kicker">Learning from you</div>
-      <h3>Your demonstrations become a policy</h3>
-      <p class="lead">Every step you took was experience: <b>this is what I saw, this is what I did,
-      this is the reward I got.</b> After each round we feed <i>all</i> your experience so far into a
-      learner. Watch the policy it builds get better the more you show it.</p>
+      <h3>The agent learns from your round — watch it play</h3>
+      <p class="lead">Every step you took became one piece of experience:
+      <b>&ldquo;in this spot, I tried this move, and got this reward.&rdquo;</b> The agent treats
+      <i>your</i> moves as its exploration, and the <b>reward is the signal</b> that says which of
+      those moves were good. It then plays the same board with what it learned — right after you.</p>
+      <details style="margin:0 0 12px;">
+        <summary style="cursor:pointer; font-weight:700; color:var(--accent);">How does that actually train a policy?</summary>
+        <p class="note" style="margin-top:8px;">For each of your moves, the agent does a tiny update:
+        nudge the value of <i>that move in that spot</i> toward <code>reward you got + the value of
+        where it led</code>. A spike's −25 pushes those moves down; the goal's +80 pulls the moves
+        that led there up; and crucially the value <b>propagates backward</b> step by step, so even
+        the early moves on a good path become &lsquo;good.&rsquo; This is <b>Q-learning</b>, and
+        because it learns the value of the <i>best</i> move (not the one you happened to take), the
+        agent can end up playing <b>better than you did.</b></p>
+      </details>
       <div class="row" style="align-items:center;">
         <div class="center">
           <canvas id="policy-replay" width="300" height="300"></canvas>
           <div class="hud"><span class="chip good" id="policy-score">—</span></div>
-          <div class="hint">The learned policy playing (full view, so you can watch)</div>
+          <div class="hint">The policy that just learned from you, playing the same board</div>
         </div>
         <div style="flex:1; min-width:240px;">
           <div class="barwrap" id="policy-bars"></div>
@@ -192,12 +203,14 @@
     const ACTIONS=["up","down","left","right"];
     const DCELL={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
     // Reaching the goal clearly dominates gem-grabbing, so the learned policy
-    // commits to finishing instead of looping for gems.
-    const STEP_COST=-0.5, GEM_R=8, SPIKE_R=-10, GOAL_R=60;
+    // commits to finishing instead of looping for gems. Spikes are INSTANT
+    // DEATH: hitting one ends the round with a big penalty.
+    const STEP_COST=-0.3, GEM_R=6, SPIKE_R=-25, GOAL_R=80;
     // The learning sections use one fixed board so tabular Q-learning can solve
-    // it (a brand-new random maze every episode is not learnable in the time we
-    // have). The player's own rounds also use this board.
-    const LEARN_SEED=777;
+    // it (a brand-new random maze every episode is not learnable in time). Seed
+    // 2 is verified: the goal is reachable without forced death, and an agent
+    // reliably learns to reach it.
+    const LEARN_SEED=2;
 
     function rngFrom(seed){ let s=seed>>>0; return ()=>(s=(s*1664525+1013904223)>>>0)/4294967296; }
     function makeBoard(seed){
@@ -250,12 +263,12 @@
       const [dx,dy]=DCELL[action];
       let nx=a.x+dx, ny=a.y+dy;
       if(cellAt(b,nx,ny)===WALL){ nx=a.x; ny=a.y; }
-      let r=STEP_COST, done=false;
+      let r=STEP_COST, done=false, died=false, won=false;
       const h=cellAt(b,nx,ny);
       if(h===GEM){ r+=GEM_R; b[ny][nx]=EMPTY; }
-      else if(h===SPIKE){ r+=SPIKE_R; b[ny][nx]=EMPTY; }
-      else if(h===GOAL){ r+=GOAL_R; done=true; }
-      return { nx, ny, reward:r, done };
+      else if(h===SPIKE){ r+=SPIKE_R; done=true; died=true; } // instant death
+      else if(h===GOAL){ r+=GOAL_R; done=true; won=true; }
+      return { nx, ny, reward:r, done, died, won };
     }
 
     // Q-learning helpers over stateKey(x,y,lastMove).
@@ -328,16 +341,19 @@
       rec.reward=o.reward; rec.nx=o.nx; rec.ny=o.ny; rec.done=o.done; rec.nlast=action;
       cur.a.x=o.nx; cur.a.y=o.ny; cur.last=action; cur.score+=o.reward; cur.moves--;
       drawPlay(); drawObs(); updateHud();
-      if(o.done){ endRound(true); }
-      else if(cur.moves<=0){ endRound(false); }
+      if(o.won){ endRound("goal"); }
+      else if(o.died){ endRound("died"); }
+      else if(cur.moves<=0){ endRound("timeout"); }
     }
 
-    function endRound(reached){
+    function endRound(outcome){
       cur.done=true;
       const fb=document.getElementById("play-feedback");
-      fb.innerHTML = reached
+      fb.innerHTML = outcome==="goal"
         ? `<span class="pill good">Reached the goal!</span> Round score: <b>${cur.score.toFixed(1)}</b>.`
-        : `<span class="pill bad">Out of moves.</span> Round score: <b>${cur.score.toFixed(1)}</b>.`;
+        : outcome==="died"
+          ? `<span class="pill bad">💀 You hit a spike — instant death.</span> Round score: <b>${cur.score.toFixed(1)}</b>. Those moves still taught the agent what to avoid.`
+          : `<span class="pill bad">Out of moves.</span> Round score: <b>${cur.score.toFixed(1)}</b>.`;
       roundIndex++; renderRounds();
       show("sec-policy");
       trainAndReplayPolicy();
@@ -391,7 +407,7 @@
         const act=greedyAct(Q,a.x,a.y,last);
         const o=simStep(b,a,act); s+=o.reward; a.x=o.nx; a.y=o.ny; last=act; m--;
         drawBoard(ctx,b,a,"all"); pill.textContent=s.toFixed(0)+" pts";
-        if(o.done){ pill.textContent=s.toFixed(0)+" pts ✓"; if(doneCb)doneCb(s); return; }
+        if(o.done){ pill.textContent=s.toFixed(0)+" pts "+(o.won?"🚩":"💀"); if(doneCb)doneCb(s); return; }
         setTimeout(tick,180);
       };
       setTimeout(tick,250);

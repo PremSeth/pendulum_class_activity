@@ -1869,6 +1869,7 @@ def build_controlled_demo_run(
     q_bins: int | None = None,
     learning_rate: float | None = None,
     epsilon_min: float | None = None,
+    terminate_on_angle: bool = True,
 ) -> dict[str, Any]:
     settings = TrainSettings(
         algorithm="Q-learning",
@@ -1885,6 +1886,9 @@ def build_controlled_demo_run(
         # Always start the pole perfectly upright and centered for the interactive
         # demos so students see a consistent starting state, not a random tilt.
         initial_state=(0.0, 0.0, 0.0, 0.0),
+        # The lazy-agent demo turns this off so the episode runs full length even
+        # if the pole falls, removing the agent's incentive to keep balancing.
+        terminate_on_angle=terminate_on_angle,
     )
     result = train_q_learning(
         settings, reward_weights or CONTROLLED_DEMO_REWARD_WEIGHTS, label="Demo"
@@ -1895,15 +1899,47 @@ def build_controlled_demo_run(
         render=True,
         sleep_limit=180,
     )
+    # When the episode never ends early (lazy-agent demo), step count no longer
+    # tells us whether the pole is up. Measure how much of an evaluation episode
+    # the pole actually stays near upright.
+    upright_fraction = _measure_upright_fraction(result, seed=seed + 311)
     return {
         "version": CONTROLLED_DEMO_VERSION,
         "features": features,
         "action_forces": action_forces,
         "score": env_score,
+        "upright_fraction": upright_fraction,
         "gif_bytes": frames_to_gif(frames, fps=30),
         # Per-episode survival length, for showing the training curve.
         "episode_lengths": list(result.episode_lengths),
     }
+
+
+def _measure_upright_fraction(result: TrainingResult, seed: int) -> float:
+    """Fraction of a (non-rendered) evaluation episode the pole stays near
+    upright (|angle| < ~12 degrees). Useful when the episode does not end on a
+    fall, so step count alone cannot tell balancing from doing nothing."""
+    env = make_env(render=False)
+    obs = reset_env(env, result.settings, seed)
+    upright = 0
+    steps = 0
+    try:
+        for _ in range(result.settings.max_steps):
+            action = choose_action_for_result(result, obs)
+            action_force = action_function(action, result.settings.action_forces)
+            next_obs, _, terminated, truncated, _ = step_cartpole_with_force(
+                env, action_force, result.settings.terminate_on_angle
+            )
+            theta = float(next_obs[2])
+            if abs(theta) < 0.2095:  # ~12 degrees, the usual upright threshold
+                upright += 1
+            steps += 1
+            obs = next_obs
+            if terminated or truncated:
+                break
+    finally:
+        env.close()
+    return upright / steps if steps else 0.0
 
 
 def cached_controlled_demo_run(
@@ -1918,12 +1954,13 @@ def cached_controlled_demo_run(
     q_bins: int | None = None,
     learning_rate: float | None = None,
     epsilon_min: float | None = None,
+    terminate_on_angle: bool = True,
 ) -> dict[str, Any]:
     cache = st.session_state.setdefault(cache_name, {})
     reward_key = json.dumps(reward_weights, sort_keys=True) if reward_weights else ""
     key = (
         CONTROLLED_DEMO_VERSION, features, action_forces, seed, reward_key,
-        episodes, q_bins, learning_rate, epsilon_min,
+        episodes, q_bins, learning_rate, epsilon_min, terminate_on_angle,
     )
     if key not in cache:
         cache[key] = build_controlled_demo_run(
@@ -1935,6 +1972,7 @@ def cached_controlled_demo_run(
             q_bins=q_bins,
             learning_rate=learning_rate,
             epsilon_min=epsilon_min,
+            terminate_on_angle=terminate_on_angle,
         )
     return dict(cache[key])
 
@@ -2675,11 +2713,11 @@ def render_reward_design_exercise(st: Any) -> None:
         render_guided_prompt(
             st,
             step_label="Step 3 of 3 · Push it further",
-            title="Now turn the alive bonus way up — try + 5 or more — and train.",
+            title="Now turn the alive bonus way up — try + 10 or more — and train.",
             body="A +1 alive bonus worked nicely. What happens if you make surviving worth a lot"
-            " more than the penalties &mdash; say <strong>+5</strong> or <strong>+10</strong>"
-            " alive? <strong>Predict what the agent will do</strong>, then train and watch"
-            " closely.",
+            " more than the penalties &mdash; set the <strong>alive</strong> bonus to"
+            " <strong>+10 or more</strong>? <strong>Predict what the agent will do</strong>, then"
+            " train and watch closely.",
         )
     else:
         stage = "done"
@@ -2730,6 +2768,10 @@ def render_reward_design_exercise(st: Any) -> None:
     if train_reward_demo:
         st.session_state.pop("reward_demo_train_requested", None)
         reward_for_run = {"reward_terms": demo_reward_terms, "reward_tokens": reward_tokens}
+        # On the lazy-agent step, remove the early end-on-fall so the episode
+        # always runs to full length. Now the alive bonus pays out every step
+        # whether or not the pole is up, so the agent has no reason to balance.
+        no_early_end = stage == "lazy"
         with st.spinner("Training a Q-learning agent with your reward..."):
             run_result = cached_controlled_demo_run(
                 st,
@@ -2742,8 +2784,10 @@ def render_reward_design_exercise(st: Any) -> None:
                 q_bins=REWARD_LESSON_Q_BINS,
                 learning_rate=REWARD_LESSON_LEARNING_RATE,
                 epsilon_min=REWARD_LESSON_EPSILON_MIN,
+                terminate_on_angle=not no_early_end,
             )
         run_result["alive_weight"] = alive_weight
+        run_result["no_early_end"] = no_early_end
         st.session_state["reward_demo_playground_run"] = run_result
         # Advance the lesson based on what this run demonstrated.
         score = float(run_result.get("score", 0.0))
@@ -2766,7 +2810,7 @@ def render_reward_design_exercise(st: Any) -> None:
                 st.session_state["reward_lesson_step1_misses"] = step1_misses + 1
         elif not saw_alive_balance and 0 < alive_weight <= 2 and score >= 80:
             st.session_state["reward_lesson_saw_alive_balance"] = True
-        elif not saw_lazy and alive_weight >= 5:
+        elif not saw_lazy and alive_weight >= 10:
             st.session_state["reward_lesson_saw_lazy"] = True
         request_streamlit_rerun(st)
 
@@ -2774,21 +2818,48 @@ def render_reward_design_exercise(st: Any) -> None:
     if isinstance(reward_run, dict) and reward_run.get("gif_bytes"):
         score = int(round(float(reward_run.get("score", 0.0))))
         run_alive = float(reward_run.get("alive_weight", 0.0))
-        st.markdown(
-            f'<div class="reward-slide-note"><strong>Your reward, trained:</strong> the agent'
-            f' balanced for <strong>{score}</strong> steps (out of {DEMO_MAX_STEPS}).</div>',
-            unsafe_allow_html=True,
-        )
+        no_early_end = bool(reward_run.get("no_early_end"))
+        upright_frac = float(reward_run.get("upright_fraction", 0.0))
+        upright_pct = int(round(upright_frac * 100))
+
+        if no_early_end:
+            # Step count is meaningless here (the episode always runs full length),
+            # so report how much of the time the pole was actually upright.
+            st.markdown(
+                f'<div class="reward-slide-note"><strong>Your reward, trained:</strong> for this'
+                f' run the episode never ends early, even if the pole falls. The pole was actually'
+                f' upright only <strong>{upright_pct}%</strong> of the time.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f'<div class="reward-slide-note"><strong>Your reward, trained:</strong> the agent'
+                f' balanced for <strong>{score}</strong> steps (out of {DEMO_MAX_STEPS}).</div>',
+                unsafe_allow_html=True,
+            )
         st.image(reward_run["gif_bytes"], width="stretch")
 
         # Training curve: how long each episode survived as training progressed.
         lengths = reward_run.get("episode_lengths")
-        if isinstance(lengths, list) and lengths:
+        if isinstance(lengths, list) and lengths and not no_early_end:
             st.caption("Episode length over training (how long the pole stayed up each episode):")
             st.line_chart({"steps balanced": [float(v) for v in lengths]}, height=200)
 
         # Explain what just happened, matched to the run.
-        if run_alive <= 0 and score < 80:
+        if no_early_end and run_alive >= 10:
+            st.warning(
+                "There it is. For this run we turned off the rule that ends the episode when the"
+                " pole falls — so the episode always runs the full length no matter what. Now the"
+                f" big alive bonus pays out every single step whether the pole is up or down, and"
+                f" the agent figured that out: it stopped trying and let the pole hang (upright"
+                f" only {upright_pct}% of the time), still collecting almost the same reward.\n\n"
+                "**This is the lazy-agent problem.** Normally the episode *cutting short* when the"
+                " pole falls is what made the alive bonus work — to keep earning +alive, the agent"
+                " *had* to keep the pole up, so the bonus quietly reinforced balancing. Remove that"
+                " cutoff, or make the bonus so large the penalties stop mattering, and the agent"
+                " gets paid for doing nothing — so it does nothing."
+            )
+        elif run_alive <= 0 and score < 80:
             st.warning(
                 "See the curve? It never really climbs — the agent gives up almost immediately."
                 " With an all-penalty reward, every step alive only adds more negative reward, so"
@@ -2800,16 +2871,9 @@ def render_reward_design_exercise(st: Any) -> None:
             st.success(
                 "Now the curve climbs and the pole stays up. The **+1 alive** term means every"
                 " step in the game is worth more than the small penalties for drifting or"
-                " rotating, so the agent finally has a reason to keep balancing while still being"
-                " nudged toward the center and steady."
-            )
-        elif run_alive >= 5:
-            st.warning(
-                "Watch closely: the agent survives, but it stops trying to stay centered or"
-                " steady — it does the bare minimum. Because **being alive pays so much more than"
-                " the penalties cost**, sloppy balancing is still a great deal. This is the"
-                " **lazy-agent problem**: an oversized survival bonus drowns out everything you"
-                " actually care about."
+                " rotating. And because the episode **ends the moment the pole falls**, the only"
+                " way to keep collecting that +1 is to actually keep balancing — so the bonus"
+                " quietly reinforces exactly the behavior you want."
             )
         else:
             st.info(

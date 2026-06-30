@@ -1921,15 +1921,20 @@ def build_controlled_demo_run(
 def _render_policy_no_terminate(result: TrainingResult, seed: int) -> tuple[bytes, float]:
     """Render a trained policy in an environment where the pole is allowed to
     fall without ending the episode, and report its upright fraction. Lets us
-    show a good agent and a lazy agent side by side in the same world."""
+    show a good agent and a lazy agent side by side in the same world.
+
+    Both start from the same small tilt so the difference is obvious right away:
+    the good agent corrects it and holds; the lazy agent lets it topple."""
     import copy
 
     eval_result = copy.copy(result)
     eval_settings = copy.copy(result.settings)
     eval_settings.terminate_on_angle = False
+    # A visible starting lean (~9 degrees) so the contrast shows from frame one.
+    eval_settings.initial_state = (0.0, 0.0, 0.16, 0.0)
     eval_result.settings = eval_settings
-    _, _, _, frames = evaluate_policy(eval_result, seed=seed, render=True, sleep_limit=180)
-    upright = _measure_upright_fraction(eval_result, seed=seed + 5)
+    _, _, _, frames = evaluate_policy(eval_result, seed=seed, render=True, sleep_limit=200)
+    upright = _measure_upright_fraction(eval_result, seed=seed)
     return (frames_to_gif(frames, fps=30) if frames else b""), upright
 
 
@@ -1975,9 +1980,14 @@ def build_lazy_comparison(*, seed: int = 21) -> dict[str, Any]:
     }
 
 
+# Bump when the lazy-comparison rendering/measurement logic changes, so stale
+# cached results (e.g. a lazy clip mislabeled as 100% upright) are rebuilt.
+LAZY_COMPARISON_VERSION = "lazy-cmp-v2-tilted"
+
+
 def cached_lazy_comparison(st: Any, *, seed: int = 21) -> dict[str, Any]:
     cache = st.session_state.setdefault("controlled_lazy_comparison_cache", {})
-    key = (CONTROLLED_DEMO_VERSION, seed)
+    key = (CONTROLLED_DEMO_VERSION, LAZY_COMPARISON_VERSION, seed)
     if key not in cache:
         cache[key] = build_lazy_comparison(seed=seed)
     return dict(cache[key])

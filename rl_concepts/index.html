@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --ink: #101828;
+      --muted: #475467;
+      --line: #d0d5dd;
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --good: #12b76a;
+      --warn: #f79009;
+      --bg: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--ink); }
+    #root { padding: 6px; }
+    .deck {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--bg);
+      overflow: hidden;
+    }
+    .deck-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 18px;
+      background: linear-gradient(120deg, #172033, #285d62);
+      color: #fff;
+    }
+    .deck-head .kicker { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
+    .deck-head h2 { margin: 0; font-size: 1.4rem; }
+    .deck-dots { margin-left: auto; display: flex; gap: 6px; }
+    .deck-dot { width: 9px; height: 9px; border-radius: 999px; background: rgba(255,255,255,0.35); }
+    .deck-dot.active { background: #fff; }
+    .slide { padding: 20px 22px 8px; min-height: 380px; }
+    .lead { font-size: 1.18rem; line-height: 1.55; color: var(--ink); margin: 0 0 14px; }
+    .note { font-size: 1rem; line-height: 1.5; color: var(--muted); margin: 12px 0; }
+    .deck-foot {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 18px; border-top: 1px solid var(--line); background: #f9fafb;
+    }
+    .btn {
+      border: 1px solid var(--line); background: #fff; color: var(--ink);
+      border-radius: 9px; padding: 0.55rem 1.1rem; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+    }
+    .btn:hover { background: #f2f4f7; }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn.primary:hover { background: #1d4ed8; }
+    .deck-foot .spacer { flex: 1; }
+    .progress-label { font-size: 0.85rem; color: var(--muted); }
+
+    /* RL loop diagram */
+    .loop { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin: 10px 0 4px; }
+    .node {
+      border: 2px solid var(--line); border-radius: 12px; padding: 14px 16px; text-align: center;
+      transition: all 0.25s; background: #fff;
+    }
+    .node h4 { margin: 0 0 4px; font-size: 1.05rem; }
+    .node p { margin: 0; font-size: 0.85rem; color: var(--muted); }
+    .node.lit { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 4px 14px rgba(37,99,235,0.15); }
+    .edge { text-align: center; color: var(--muted); font-size: 0.82rem; }
+    .edge .arrow { font-size: 1.4rem; color: var(--accent); }
+    .loop-caption {
+      margin-top: 12px; padding: 12px 14px; border-radius: 10px;
+      background: var(--accent-soft); border: 1px solid #bfdbfe; font-size: 1rem; min-height: 3.2rem;
+    }
+
+    /* chips / toggles */
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+    .chip {
+      border: 1px solid var(--line); border-radius: 999px; padding: 0.45rem 0.85rem; cursor: pointer;
+      font-weight: 700; font-size: 0.92rem; background: #fff; user-select: none;
+    }
+    .chip.on { background: var(--accent-soft); border-color: var(--accent); color: #1d4ed8; }
+    .chip.off { opacity: 0.55; }
+
+    .panel { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #fcfdff; margin: 10px 0; }
+    .panel h4 { margin: 0 0 8px; font-size: 1rem; }
+    .mono { font-family: ui-monospace, Menlo, monospace; }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 680px) { .grid2, .loop { grid-template-columns: 1fr; } }
+
+    .obs-readout { font-family: ui-monospace, Menlo, monospace; font-size: 0.95rem; line-height: 1.7; }
+    .obs-hidden { color: #b42318; text-decoration: line-through; }
+
+    /* policy table */
+    table.policy { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    table.policy th, table.policy td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+    table.policy th { background: #f2f4f7; }
+    table.policy select { font-size: 0.95rem; padding: 3px 6px; }
+
+    .reward-num { font-size: 2.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .reward-num.up { color: var(--good); }
+    .reward-num.down { color: #b42318; }
+
+    /* q-table */
+    .qgrid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px; align-items: center; }
+    .qcell {
+      border: 1px solid var(--line); border-radius: 8px; padding: 10px; text-align: center;
+      font-variant-numeric: tabular-nums; font-weight: 700; transition: background 0.3s;
+    }
+    .qcell.head { background: #f2f4f7; font-weight: 800; }
+    .qcell.best { background: #ecfdf3; border-color: var(--good); color: #027a48; }
+    .qcell.bumped { background: #fff7ed; border-color: var(--warn); }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="deck">
+      <div class="deck-head">
+        <div>
+          <div class="kicker">Reinforcement Learning</div>
+          <h2 id="slide-title">—</h2>
+        </div>
+        <div class="deck-dots" id="dots"></div>
+      </div>
+      <div class="slide" id="slide-body"></div>
+      <div class="deck-foot">
+        <button class="btn" id="prev">‹ Back</button>
+        <span class="progress-label" id="progress"></span>
+        <span class="spacer"></span>
+        <button class="btn primary" id="next">Next ›</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function streamlitMessage(type, data) {
+      window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type }, data || {}), "*");
+    }
+    function ready() { streamlitMessage("streamlit:componentReady", { apiVersion: 1 }); }
+    function setHeight() {
+      const root = document.getElementById("root");
+      streamlitMessage("streamlit:setFrameHeight", { height: root.scrollHeight + 8 });
+    }
+    function sendValue(v) {
+      streamlitMessage("streamlit:setComponentValue", { value: v, dataType: "json" });
+    }
+
+    let slideIndex = 0;
+    const state = {
+      // slide 2: which parts of the state are observable
+      observable: { cart: true, cartVel: true, angle: true, angleVel: true },
+      // slide 3 policy choices
+      policy: { leftTilt: "push_left", rightTilt: "push_right" },
+      // slide 4 reward toy
+      reward: 0,
+      // slide 5 q-table
+      q: { left: { L: 0, R: 0 }, right: { L: 0, R: 0 } },
+    };
+
+    // ---- Slides --------------------------------------------------------------
+    const slides = [
+      {
+        title: "What is reinforcement learning?",
+        render() {
+          return `
+            <p class="lead">In reinforcement learning, an <strong>agent</strong> learns by
+            <strong>trial and error</strong> inside an <strong>environment</strong>. There is no
+            answer key — it tries things, sees what happens, and gets a <strong>reward</strong>
+            telling it how well it did.</p>
+            <div class="loop">
+              <div class="node" data-node="agent"><h4>Agent</h4><p>the learner / decision-maker</p></div>
+              <div class="edge"><div class="arrow">→</div><span id="edge-act">action</span></div>
+              <div class="node" data-node="env"><h4>Environment</h4><p>the world it acts in</p></div>
+            </div>
+            <div class="loop">
+              <div class="edge" style="grid-column:1 / -1;"><span id="edge-back">observation + reward</span> <span class="arrow">↩</span></div>
+            </div>
+            <div class="loop-caption" id="loop-cap">Press <strong>Step the loop</strong> to walk through one cycle.</div>
+            <div class="chips"><button class="btn primary" id="loop-step">Step the loop ▶</button></div>
+          `;
+        },
+        mount() {
+          const steps = [
+            { node: "agent", cap: "<strong>1. Observe.</strong> The agent looks at the environment and gets an <em>observation</em> of the current situation." },
+            { node: "agent", cap: "<strong>2. Decide.</strong> Based on what it sees, the agent picks an <em>action</em> using its <em>policy</em>." },
+            { node: "env", cap: "<strong>3. Act.</strong> The action changes the environment — the world moves to a new situation." },
+            { node: "env", cap: "<strong>4. Reward.</strong> The environment hands back a <em>reward</em>: a number saying how good that was." },
+            { node: "agent", cap: "<strong>5. Repeat.</strong> Over many cycles the agent adjusts its policy to earn more reward. That loop <em>is</em> reinforcement learning." },
+          ];
+          let i = -1;
+          const btn = document.getElementById("loop-step");
+          btn.onclick = () => {
+            i = (i + 1) % steps.length;
+            const s = steps[i];
+            document.querySelectorAll(".node").forEach((n) => n.classList.toggle("lit", n.dataset.node === s.node));
+            document.getElementById("loop-cap").innerHTML = s.cap;
+            btn.textContent = i === steps.length - 1 ? "Start over ↺" : "Step the loop ▶";
+            setHeight();
+          };
+        },
+      },
+
+      {
+        title: "State vs. observation",
+        render() {
+          return `
+            <p class="lead">The <strong>state</strong> is everything true about the world right now.
+            An <strong>observation</strong> is only the part the agent actually gets to <em>see</em>.
+            They are not always the same — and what you let the agent observe changes what it can learn.</p>
+            <div class="grid2">
+              <div class="panel">
+                <h4>Toggle what the agent can observe</h4>
+                <div class="chips" id="obs-chips"></div>
+                <p class="note" style="margin:6px 0 0;">Click a signal to hide it from the agent.</p>
+              </div>
+              <div class="panel">
+                <h4>What the agent receives</h4>
+                <div class="obs-readout" id="obs-readout"></div>
+              </div>
+            </div>
+            <div class="loop-caption" id="obs-cap"></div>
+          `;
+        },
+        mount() {
+          const labels = { cart: "cart position", cartVel: "cart velocity", angle: "pole angle", angleVel: "pole spin" };
+          const sample = { cart: "0.12 m", cartVel: "-0.30 m/s", angle: "0.05 rad", angleVel: "0.20 rad/s" };
+          const chips = document.getElementById("obs-chips");
+          const readout = document.getElementById("obs-readout");
+          const cap = document.getElementById("obs-cap");
+          function paint() {
+            chips.innerHTML = Object.keys(labels).map((k) =>
+              `<span class="chip ${state.observable[k] ? "on" : "off"}" data-k="${k}">${labels[k]}</span>`).join("");
+            readout.innerHTML = Object.keys(labels).map((k) =>
+              state.observable[k]
+                ? `${labels[k]} = ${sample[k]}`
+                : `<span class="obs-hidden">${labels[k]} = (hidden)</span>`).join("<br>");
+            const hidden = Object.keys(labels).filter((k) => !state.observable[k]);
+            cap.innerHTML = hidden.length === 0
+              ? "The agent sees the full state — the observation equals the state."
+              : `The agent is <strong>blind</strong> to ${hidden.map((k) => labels[k]).join(", ")}. It must act on incomplete information — that can make the task much harder.`;
+            chips.querySelectorAll(".chip").forEach((c) => c.onclick = () => {
+              state.observable[c.dataset.k] = !state.observable[c.dataset.k];
+              paint(); setHeight();
+            });
+          }
+          paint();
+        },
+      },
+
+      {
+        title: "Actions and the policy",
+        render() {
+          return `
+            <p class="lead">An <strong>action</strong> is a choice the agent can make. The
+            <strong>policy</strong> is its strategy: a rule that maps <em>what it observes</em> to
+            <em>what it does</em>. Fill in a simple policy below.</p>
+            <table class="policy">
+              <tr><th>If the agent observes…</th><th>…it should take action</th></tr>
+              <tr>
+                <td>pole tilting <strong>left</strong></td>
+                <td>
+                  <select id="pol-left">
+                    <option value="push_left">push left</option>
+                    <option value="push_right">push right</option>
+                    <option value="do_nothing">do nothing</option>
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td>pole tilting <strong>right</strong></td>
+                <td>
+                  <select id="pol-right">
+                    <option value="push_left">push left</option>
+                    <option value="push_right">push right</option>
+                    <option value="do_nothing">do nothing</option>
+                  </select>
+                </td>
+              </tr>
+            </table>
+            <div class="loop-caption" id="pol-cap"></div>
+          `;
+        },
+        mount() {
+          const left = document.getElementById("pol-left");
+          const right = document.getElementById("pol-right");
+          left.value = state.policy.leftTilt;
+          right.value = state.policy.rightTilt;
+          const cap = document.getElementById("pol-cap");
+          const niceAction = { push_left: "push left", push_right: "push right", do_nothing: "do nothing" };
+          function evaluate() {
+            state.policy.leftTilt = left.value;
+            state.policy.rightTilt = right.value;
+            const good = left.value === "push_right" && right.value === "push_left";
+            if (good) {
+              cap.innerHTML = "✓ Smart policy — push <em>toward</em> the lean to catch the pole. This simple rule already balances surprisingly well. A learned policy is just a much more detailed version of this table.";
+            } else {
+              cap.innerHTML = "Try it: a pole tilting left is falling left, so pushing <em>right</em> would slide the cart under it. What two choices would catch the pole each way?";
+            }
+            setHeight();
+          }
+          left.onchange = evaluate;
+          right.onchange = evaluate;
+          evaluate();
+        },
+      },
+
+      {
+        title: "Reward: the goal in a number",
+        render() {
+          return `
+            <p class="lead">The agent does not know what &lsquo;good&rsquo; means until you tell it
+            with a <strong>reward</strong>. Every step, the environment returns a number; the agent's
+            only job is to collect as much of it as possible. <strong>How you define reward defines
+            the behavior you get.</strong></p>
+            <div class="panel" style="text-align:center;">
+              <div>Total reward this episode</div>
+              <div class="reward-num" id="reward-num">0</div>
+              <div class="chips" style="justify-content:center;">
+                <button class="btn" data-r="1">Pole stayed up (+1)</button>
+                <button class="btn" data-r="-1">Pole drifted (−1)</button>
+                <button class="btn" data-r="-10">Pole fell (−10)</button>
+              </div>
+            </div>
+            <div class="loop-caption">Imagine thousands of these adding up. The agent will chase
+            whatever makes this number bigger — so a careless reward can teach the wrong thing.</div>
+          `;
+        },
+        mount() {
+          const num = document.getElementById("reward-num");
+          num.textContent = state.reward;
+          document.querySelectorAll("[data-r]").forEach((b) => b.onclick = () => {
+            const d = Number(b.dataset.r);
+            state.reward += d;
+            num.textContent = state.reward;
+            num.className = "reward-num " + (d >= 0 ? "up" : "down");
+          });
+        },
+      },
+
+      {
+        title: "Q-learning: learning what's good",
+        render() {
+          return `
+            <p class="lead">How does the agent <em>learn</em> a policy? One classic way is
+            <strong>Q-learning</strong>. It keeps a table of <strong>Q-values</strong>: an estimate of
+            &lsquo;how much reward I expect if I take this action in this situation.&rsquo; Acting and
+            seeing rewards nudges those numbers; the best action is just the highest Q-value.</p>
+            <div class="panel">
+              <div class="qgrid" id="qgrid"></div>
+              <div class="chips" style="margin-top:12px;">
+                <button class="btn primary" id="q-step">Take a step &amp; learn ▶</button>
+                <button class="btn" id="q-reset">Reset</button>
+              </div>
+            </div>
+            <div class="loop-caption" id="q-cap">The table starts at zero — the agent knows nothing.
+            Each step it tries an action, gets a reward, and updates that cell toward what it saw.</div>
+          `;
+        },
+        mount() {
+          const grid = document.getElementById("qgrid");
+          const cap = document.getElementById("q-cap");
+          // "reward model" for the toy: in left-tilt, pushing right is good; mirror for right-tilt.
+          const trueReward = { left: { L: -1, R: 1 }, right: { L: 1, R: -1 } };
+          let lastCell = null;
+          function paint() {
+            const cells = [];
+            cells.push(`<div class="qcell head"></div><div class="qcell head">push left</div><div class="qcell head">push right</div>`);
+            for (const s of ["left", "right"]) {
+              cells.push(`<div class="qcell head">tilt ${s}</div>`);
+              for (const a of ["L", "R"]) {
+                const best = state.q[s].R !== state.q[s].L && state.q[s][a] === Math.max(state.q[s].L, state.q[s].R) && state.q[s][a] !== 0;
+                const bumped = lastCell && lastCell[0] === s && lastCell[1] === a;
+                cells.push(`<div class="qcell ${best ? "best" : ""} ${bumped ? "bumped" : ""}">${state.q[s][a].toFixed(2)}</div>`);
+              }
+            }
+            grid.innerHTML = cells.join("");
+          }
+          document.getElementById("q-step").onclick = () => {
+            const s = Math.random() < 0.5 ? "left" : "right";
+            const a = Math.random() < 0.5 ? "L" : "R";
+            const r = trueReward[s][a];
+            const alpha = 0.5;
+            state.q[s][a] += alpha * (r - state.q[s][a]); // simple update toward observed reward
+            lastCell = [s, a];
+            const niceA = a === "L" ? "push left" : "push right";
+            cap.innerHTML = `Tried <strong>${niceA}</strong> while tilting <strong>${s}</strong>, got reward <strong>${r > 0 ? "+" : ""}${r}</strong>. That cell moved toward ${r}. Keep stepping — the good actions rise, the bad ones fall, and a policy emerges.`;
+            paint(); setHeight();
+          };
+          document.getElementById("q-reset").onclick = () => {
+            state.q = { left: { L: 0, R: 0 }, right: { L: 0, R: 0 } };
+            lastCell = null;
+            cap.innerHTML = "Back to zero. The agent knows nothing again.";
+            paint(); setHeight();
+          };
+          paint();
+        },
+      },
+    ];
+
+    // ---- Deck plumbing -------------------------------------------------------
+    function renderSlide() {
+      const s = slides[slideIndex];
+      document.getElementById("slide-title").textContent = s.title;
+      document.getElementById("slide-body").innerHTML = s.render();
+      if (s.mount) s.mount();
+      document.getElementById("dots").innerHTML = slides.map((_, i) =>
+        `<span class="deck-dot ${i === slideIndex ? "active" : ""}"></span>`).join("");
+      document.getElementById("progress").textContent = `${slideIndex + 1} of ${slides.length}`;
+      document.getElementById("prev").disabled = slideIndex === 0;
+      const next = document.getElementById("next");
+      next.textContent = slideIndex === slides.length - 1 ? "Finish — start the pendulum ›" : "Next ›";
+      setHeight();
+    }
+
+    document.getElementById("prev").onclick = () => {
+      if (slideIndex > 0) { slideIndex--; renderSlide(); }
+    };
+    document.getElementById("next").onclick = () => {
+      if (slideIndex < slides.length - 1) { slideIndex++; renderSlide(); }
+      else { sendValue({ done: true, ts: Date.now() }); }
+    };
+
+    window.addEventListener("message", (event) => {
+      const data = event.data || {};
+      if (data.type !== "streamlit:render") return;
+      setHeight();
+    });
+
+    renderSlide();
+    setHeight();
+    ready();
+  </script>
+</body>
+</html>

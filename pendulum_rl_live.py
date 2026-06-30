@@ -628,6 +628,23 @@ def pendulum_playground_component(*, height: int = 470, key: str = "pendulum_pla
     return _PENDULUM_PLAYGROUND_COMPONENT(height=height, key=key)
 
 
+_RL_CONCEPTS_COMPONENT: Any | None = None
+
+
+def rl_concepts_component(*, key: str = "rl_concepts") -> Any:
+    """Render the interactive RL-concepts slide deck and return its value
+    (a dict with {"done": True} once the student finishes the last slide)."""
+    global _RL_CONCEPTS_COMPONENT
+    components = require_dependencies("streamlit.components.v1")["streamlit.components.v1"]
+    if _RL_CONCEPTS_COMPONENT is None:
+        component_dir = Path(__file__).parent / "rl_concepts"
+        _RL_CONCEPTS_COMPONENT = components.declare_component(
+            "rl_concepts",
+            path=str(component_dir),
+        )
+    return _RL_CONCEPTS_COMPONENT(key=key)
+
+
 ACTION_PRESETS: dict[str, tuple[float, ...]] = {
     "Standard left/right": (-10.0, 10.0),
     "Gentle left/none/right": (-5.0, 0.0, 5.0),
@@ -1662,6 +1679,31 @@ def scroll_to_top_if_requested(st: Any) -> None:
     )
 
 
+def render_rl_concepts_page(st: Any) -> None:
+    """Interactive intro to RL fundamentals before the pendulum-specific work."""
+    st.title("Reinforcement learning, from scratch")
+    st.markdown(
+        "Before we tackle the pendulum, let's build the core ideas. Step through"
+        " each slide and play with the interactive pieces."
+    )
+    value = rl_concepts_component()
+    finished = isinstance(value, dict) and value.get("done")
+
+    back_column, next_column = st.columns(2)
+    if back_column.button("Back", use_container_width=True):
+        set_app_stage(st, "intro")
+    # The deck's final button reports done; the page also offers an explicit
+    # Continue so students are never stuck if the component value is missed.
+    advance = next_column.button(
+        "Continue to the pendulum",
+        type="primary",
+        use_container_width=True,
+        key="rl_concepts_continue",
+    )
+    if finished or advance:
+        set_app_stage(st, "background")
+
+
 def render_intro_page(st: Any) -> None:
     gif_bytes = intro_demo_gif(st)
     if gif_bytes:
@@ -1726,7 +1768,7 @@ def render_intro_page(st: Any) -> None:
         if st.button("Start tutorial", type="primary", use_container_width=True):
             st.session_state["tutorial_enabled"] = True
             st.session_state["tutorial_step"] = 0
-            set_app_stage(st, "background")
+            set_app_stage(st, "rl_concepts")
     with skip_column:
         st.markdown('<span class="intro-start-button"></span>', unsafe_allow_html=True)
         if st.button("Skip to activity", use_container_width=True):
@@ -5364,6 +5406,7 @@ def render_instructor_controls(st: Any) -> None:
         st.success("Instructor mode unlocked.")
         page_options = {
             "Home": "intro",
+            "RL concepts": "rl_concepts",
             "Background": "background",
             "Meet the pendulum": "pendulum_intro",
             "Observation slides": "observation_demo",
@@ -5623,6 +5666,9 @@ def run_streamlit_app() -> None:
 
     if stage == "intro":
         render_intro_page(st)
+        return
+    if stage == "rl_concepts":
+        render_rl_concepts_page(st)
         return
     if stage == "background":
         render_background_page(st)

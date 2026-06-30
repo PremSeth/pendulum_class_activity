@@ -123,16 +123,18 @@
     .qtable-card, .strategy-card { border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:#fcfdff; }
     .qtable-title { font-weight:800; font-size:0.96rem; margin-bottom:8px; }
     .qtable-foot { font-size:0.78rem; color:var(--muted); margin-top:8px; line-height:1.4; }
-    table.qtbl { width:100%; border-collapse:separate; border-spacing:4px; }
-    table.qtbl th { font-size:0.74rem; color:var(--muted); font-weight:700; padding:2px; }
-    table.qtbl td.obs { white-space:nowrap; }
-    .qmini { display:inline-flex; gap:2px; vertical-align:middle; }
-    .qmini i { width:18px; height:18px; border-radius:3px; border:1px solid #e4e7ec; display:inline-flex;
-      align-items:center; justify-content:center; font-size:0.7rem; font-style:normal; background:#fff; }
-    .qmini i.me { background:#dbeafe; border-color:var(--accent); }
-    .qcellv { border-radius:6px; text-align:center; font-size:0.78rem; font-weight:800; padding:6px 2px;
-      font-variant-numeric:tabular-nums; transition:background .25s, color .25s; }
-    .qcellv.best { outline:2px solid #111827; }
+    /* Notebook entries: "when it sees ___, here's how good each move looks" */
+    .qentry { border:1px solid #e4e7ec; border-radius:10px; padding:9px 11px; margin-bottom:8px; background:#fff; }
+    .qentry-head { font-size:0.86rem; color:var(--ink); margin-bottom:7px; }
+    .qentry-head b { font-weight:800; }
+    .qbars { display:flex; flex-direction:column; gap:4px; }
+    .qbar-row { display:grid; grid-template-columns:74px 1fr; align-items:center; gap:8px; }
+    .qbar-name { font-size:0.82rem; color:var(--muted); text-align:right; white-space:nowrap; }
+    .qbar-name.win { color:#065f46; font-weight:800; }
+    .qbar-track { position:relative; height:16px; background:#f1f5f9; border-radius:5px; }
+    .qbar-mid { position:absolute; left:50%; top:0; bottom:0; width:1px; background:#cbd5e1; }
+    .qbar-fill { position:absolute; top:0; bottom:0; border-radius:4px; transition:left .25s, width .25s, background .25s; }
+    .qbar-tag { font-size:0.72rem; color:#94a3b8; }
     .explore-bar { display:flex; height:20px; border-radius:999px; overflow:hidden; border:1px solid var(--line); margin:4px 0 6px; }
     .explore-seg { height:100%; transition:width .25s; }
     .explore-seg.explore { background:#f59e0b; }
@@ -309,7 +311,7 @@
             <div class="qtable-card">
               <div class="qtable-title">The Q-table (the notebook)</div>
               <div id="qtable-viz"></div>
-              <div class="qtable-foot">Greener = this move looks better here · redder = worse · grey = not learned yet</div>
+              <div class="qtable-foot">Each entry: how good every move looks. Bar grows <b style="color:#10b981;">right &amp; green</b> = good move, <b style="color:#ef4444;">left &amp; red</b> = bad move. The ✓ is the move it would pick.</div>
             </div>
             <div class="strategy-card">
               <div class="qtable-title">How it's choosing moves</div>
@@ -323,9 +325,8 @@
       </div>
 
       <div class="qcallout">
-        <b>That's Q-learning in a sentence:</b> try moves, let the rewards score each move in each
-        situation, explore a lot at first, then trust the high scores. No rulebook — the points do
-        the teaching.
+        <b>That's Q-learning:</b> try moves, let the rewards score each move in each situation,
+        explore a lot at first, then trust the high scores. No rulebook — the points do the teaching.
       </div>
       <div class="center" style="margin-top:14px;">
         <button class="btn primary big" id="qlearning-continue">Continue</button>
@@ -754,14 +755,6 @@
     };
 
     // ---- Q-learning timeline: scrub training; show Q-table + explore/greedy --
-    const VIZ_CELL_GLYPH={[GEM]:"💎",[SPIKE]:"🔺",[GOAL]:"🚩",[EMPTY]:"",[OFF]:"⛔"};
-    function qColor(v){
-      // grey if effectively unlearned; green for high, red for low
-      if(Math.abs(v)<0.4) return {bg:"#eef2f7", fg:"#94a3b8"};
-      const t=Math.max(-1,Math.min(1, v/40));      // -1..1
-      if(t>=0){ const a=0.15+0.55*t; return {bg:`rgba(16,185,129,${a})`, fg:"#064e3b"}; }
-      const a=0.15+0.55*(-t); return {bg:`rgba(239,68,68,${a})`, fg:"#7f1d1d"};
-    }
     function renderQTimeline(){
       const sl=document.getElementById("time-slider");
       const timeLabel=document.getElementById("time-label");
@@ -772,39 +765,60 @@
       const note=document.getElementById("eps-note");
       if(!qSnapshots.length) return;
 
-      function miniObs(nb){
-        const slot=(p)=> p==="me" ? `<i class="me">🙂</i>`
-          : p===null ? `<i style="border:none;background:transparent;"></i>`
-          : `<i>${VIZ_CELL_GLYPH[nb[p]]||""}</i>`;
-        return `<span class="qmini">${[null,"up",null].map(slot).join("")}</span>`
-             + `<span class="qmini">${["left","me","right"].map(slot).join("")}</span>`
-             + `<span class="qmini">${[null,"down",null].map(slot).join("")}</span>`;
+      // Plain-language description of what the agent sees in a VIZ row.
+      function obsPhrase(nb){
+        const word={[GEM]:"💎 gem",[SPIKE]:"🔺 spike",[GOAL]:"🚩 flag"};
+        const dir={up:"above",down:"below",left:"to the left",right:"to the right"};
+        const parts=[];
+        for(const d of ["up","down","left","right"]) if(word[nb[d]]) parts.push(`a ${word[nb[d]]} ${dir[d]}`);
+        if(!parts.length) return "open space all around";
+        return parts.join(" and ");
       }
+      const ARROW={up:"⬆️ up",down:"⬇️ down",left:"⬅️ left",right:"➡️ right"};
+
       function paint(){
         const frac=Number(sl.value)/100;
         const idx=Math.min(qSnapshots.length-1, Math.round(frac*(qSnapshots.length-1)));
         const snap=qSnapshots[idx];
         const epsPct=Math.round(snap.eps*100);
         timeLabel.textContent=`Episode ${snap.ep.toLocaleString()} of ${ (qSnapshots[qSnapshots.length-1].ep).toLocaleString() }`;
-        // Q-table
-        let html=`<table class="qtbl"><tr><th>what it sees</th><th>⬆️</th><th>⬇️</th><th>⬅️</th><th>➡️</th></tr>`;
+
+        // One readable "notebook entry" per observation: bars showing how good
+        // each move looks (right=good/green, left=bad/red), winner highlighted.
+        const SCALE=50; // value -> half-width fraction
+        let html="";
         for(let r=0;r<VIZ_OBS.length;r++){
           const row=snap.rows[r];
-          const best=Math.max(row.up,row.down,row.left,row.right);
-          const cell=(v)=>{ const c=qColor(row.seen?v:0);
-            const isBest=row.seen && v===best && Math.abs(v)>=0.4;
-            return `<td><div class="qcellv ${isBest?"best":""}" style="background:${c.bg};color:${c.fg};">${row.seen&&Math.abs(v)>=0.05?v.toFixed(0):"·"}</div></td>`; };
-          html+=`<tr><td class="obs">${miniObs(VIZ_OBS[r].nb)}</td>${cell(row.up)}${cell(row.down)}${cell(row.left)}${cell(row.right)}</tr>`;
+          const vals={up:row.up,down:row.down,left:row.left,right:row.right};
+          const best=Math.max(vals.up,vals.down,vals.left,vals.right);
+          const anyLearned=row.seen && (Math.abs(vals.up)+Math.abs(vals.down)+Math.abs(vals.left)+Math.abs(vals.right))>0.4;
+          const bars=["up","down","left","right"].map(a=>{
+            const v=vals[a];
+            const f=Math.max(-1,Math.min(1, v/50));
+            const w=Math.abs(f)*50;                  // half-track %
+            const left=f>=0?50:50-w;
+            const color=!anyLearned?"#cbd5e1":(f>=0?"#10b981":"#ef4444");
+            const isWin=anyLearned && v===best;
+            return `<div class="qbar-row">
+              <div class="qbar-name ${isWin?"win":""}">${ARROW[a]}${isWin?" ✓":""}</div>
+              <div class="qbar-track"><div class="qbar-mid"></div>
+                <div class="qbar-fill" style="left:${left}%;width:${Math.max(w,anyLearned?2:0)}%;background:${color};"></div>
+              </div>
+            </div>`;
+          }).join("");
+          const headline = anyLearned
+            ? `When it sees <b>${obsPhrase(VIZ_OBS[r].nb)}</b>, its best move is <b>${ARROW[Object.keys(vals).find(k=>vals[k]===best)]}</b>`
+            : `When it sees <b>${obsPhrase(VIZ_OBS[r].nb)}</b> — <span class="qbar-tag">not learned yet</span>`;
+          html+=`<div class="qentry"><div class="qentry-head">${headline}</div><div class="qbars">${bars}</div></div>`;
         }
-        html+=`</table>`;
         viz.innerHTML=html;
         // explore/greedy
         expSeg.style.width=epsPct+"%"; grdSeg.style.width=(100-epsPct)+"%";
         epsLabel.textContent=`${epsPct}% random · ${100-epsPct}% greedy`;
-        if(epsPct>=80) note.innerHTML="<b>Just starting out.</b> The notebook is nearly blank (all grey), so it explores almost every move — like you wandering on round 1.";
-        else if(epsPct>=35) note.innerHTML="<b>Mid-training.</b> Cells are filling in. It mostly uses the notebook but still explores sometimes, hunting for better moves.";
-        else if(epsPct>10) note.innerHTML="<b>Getting confident.</b> Clear winners (green) have appeared; it explores only occasionally now.";
-        else note.innerHTML="<b>Trained.</b> The good moves are locked in. It almost always goes greedy — picks the greenest cell in each row.";
+        if(epsPct>=80) note.innerHTML="<b>Just starting out.</b> The notebook is nearly blank, so it explores almost every move — like you wandering on round 1.";
+        else if(epsPct>=35) note.innerHTML="<b>Mid-training.</b> The bars are filling in. It mostly uses the notebook but still explores sometimes, hunting for better moves.";
+        else if(epsPct>10) note.innerHTML="<b>Getting confident.</b> Clear winners (green ✓) have appeared; it explores only occasionally now.";
+        else note.innerHTML="<b>Trained.</b> The good moves are locked in. It almost always goes greedy — picks the winning move in each entry.";
       }
       sl.addEventListener("input",paint);
       paint();

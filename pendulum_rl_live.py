@@ -454,7 +454,7 @@ REWARD_DEMO_WEIGHTS: dict[str, dict[str, Any]] = {
 }
 
 
-CONTROLLED_DEMO_VERSION = "controlled-demo-v6-coscos"
+CONTROLLED_DEMO_VERSION = "controlled-demo-v7-rewardlesson"
 DEMO_EPISODES = 500
 # The reward demos need to converge enough to show the cos-vs-sin difference, so
 # they train longer than the snappy observation/action demos.
@@ -465,6 +465,15 @@ DEMO_GAMMA = 0.99
 DEMO_EPSILON = 0.9
 DEMO_EPSILON_MIN = 0.05
 DEMO_Q_BINS = 6
+
+# The reward-design exercise needs training strong enough that a genuinely good
+# reward reliably balances (so students can trust what they see). Tabular
+# Q-learning on the 4D state needs more bins and more episodes than the snappy
+# observation/action demos use.
+REWARD_LESSON_EPISODES = 2500
+REWARD_LESSON_Q_BINS = 10
+REWARD_LESSON_LEARNING_RATE = 0.1
+REWARD_LESSON_EPSILON_MIN = 0.01
 
 
 REWARD_SCALE_LABELS: dict[str, str] = {
@@ -1856,17 +1865,21 @@ def build_controlled_demo_run(
     action_forces: tuple[float, ...],
     seed: int,
     reward_weights: dict[str, Any] | None = None,
+    episodes: int | None = None,
+    q_bins: int | None = None,
+    learning_rate: float | None = None,
+    epsilon_min: float | None = None,
 ) -> dict[str, Any]:
     settings = TrainSettings(
         algorithm="Q-learning",
-        episodes=DEMO_EPISODES,
+        episodes=episodes if episodes is not None else DEMO_EPISODES,
         max_steps=DEMO_MAX_STEPS,
-        learning_rate=DEMO_LEARNING_RATE,
+        learning_rate=learning_rate if learning_rate is not None else DEMO_LEARNING_RATE,
         gamma=DEMO_GAMMA,
         epsilon=DEMO_EPSILON,
-        epsilon_min=DEMO_EPSILON_MIN,
+        epsilon_min=epsilon_min if epsilon_min is not None else DEMO_EPSILON_MIN,
         seed=seed,
-        q_bins_per_feature=DEMO_Q_BINS,
+        q_bins_per_feature=q_bins if q_bins is not None else DEMO_Q_BINS,
         observation_features=features,
         action_forces=action_forces,
         # Always start the pole perfectly upright and centered for the interactive
@@ -1888,6 +1901,8 @@ def build_controlled_demo_run(
         "action_forces": action_forces,
         "score": env_score,
         "gif_bytes": frames_to_gif(frames, fps=30),
+        # Per-episode survival length, for showing the training curve.
+        "episode_lengths": list(result.episode_lengths),
     }
 
 
@@ -1899,16 +1914,27 @@ def cached_controlled_demo_run(
     action_forces: tuple[float, ...],
     seed: int,
     reward_weights: dict[str, Any] | None = None,
+    episodes: int | None = None,
+    q_bins: int | None = None,
+    learning_rate: float | None = None,
+    epsilon_min: float | None = None,
 ) -> dict[str, Any]:
     cache = st.session_state.setdefault(cache_name, {})
     reward_key = json.dumps(reward_weights, sort_keys=True) if reward_weights else ""
-    key = (CONTROLLED_DEMO_VERSION, features, action_forces, seed, reward_key)
+    key = (
+        CONTROLLED_DEMO_VERSION, features, action_forces, seed, reward_key,
+        episodes, q_bins, learning_rate, epsilon_min,
+    )
     if key not in cache:
         cache[key] = build_controlled_demo_run(
             features=features,
             action_forces=action_forces,
             seed=seed,
             reward_weights=reward_weights,
+            episodes=episodes,
+            q_bins=q_bins,
+            learning_rate=learning_rate,
+            epsilon_min=epsilon_min,
         )
     return dict(cache[key])
 
@@ -2571,6 +2597,201 @@ def reward_demo_cache(st: Any) -> dict[str, Any]:
     return dict(st.session_state[cache_key])
 
 
+def _alive_factor(terms: list[dict[str, Any]]) -> float:
+    """Total positive 'alive' weight in a built reward (0 if none)."""
+    return sum(
+        float(t.get("factor", 0.0))
+        for t in terms
+        if str(t.get("signal")) == "alive"
+    )
+
+
+def render_reward_design_exercise(st: Any) -> None:
+    """Staged reward-design lesson: penalties-only fails, +alive fixes it, too
+    much alive makes the agent lazy."""
+    st.markdown(GUIDED_PROMPT_STYLE, unsafe_allow_html=True)
+    st.subheader("Your turn: design a reward function")
+
+    reward_pool = [
+        {
+            "id": signal,
+            "label": REWARD_SIGNAL_LABELS[signal],
+            "group": group,
+            "scales": REWARD_SCALE_LABELS if signal in REWARD_SCALE_SIGNALS else {},
+            "default_scale": default_reward_scale(signal),
+        }
+        for group, signals in {
+            "Episode": ["alive", "fell"],
+            "Cart state": ["cart_position", "cart_velocity"],
+            "Pole state": ["pole_angle", "pole_angular_velocity"],
+        }.items()
+        for signal in signals
+    ]
+
+    # What the student has discovered so far (persists as they progress).
+    saw_penalty_fail = bool(st.session_state.get("reward_lesson_saw_penalty_fail"))
+    saw_alive_balance = bool(st.session_state.get("reward_lesson_saw_alive_balance"))
+    saw_lazy = bool(st.session_state.get("reward_lesson_saw_lazy"))
+
+    # Decide the current stage and show the matching prompt.
+    if not saw_penalty_fail:
+        stage = "penalty"
+        render_guided_prompt(
+            st,
+            step_label="Step 1 of 3 · Penalties only",
+            title="Build  − | cart position |  −  | pole velocity |  and train it.",
+            body="Tell the agent what you do <em>not</em> want: drifting from the center and the"
+            " pole rotating. Drag in <strong>cart position</strong> and <strong>pole angular"
+            " velocity</strong>, wrap each in <strong>absolute value</strong>, and put a"
+            " <strong>negative</strong> sign in front of each. <strong>Predict</strong> how it"
+            " will do, then train and watch.",
+        )
+    elif not saw_alive_balance:
+        stage = "alive"
+        render_guided_prompt(
+            st,
+            step_label="Step 2 of 3 · Give it a reason to live",
+            title="Now add a  + 1 · alive  term and train again.",
+            body="Your last reward was all penalties, so every extra step only made the total"
+            " <em>worse</em> &mdash; the agent's best move was to end the episode fast. Add a"
+            " <strong>+1 alive</strong> term so staying in the game finally pays. Now keeping the"
+            " pole up earns +1 each step, while drifting and rotating cost a little. Train and"
+            " compare.",
+            tone="warn",
+        )
+    elif not saw_lazy:
+        stage = "lazy"
+        render_guided_prompt(
+            st,
+            step_label="Step 3 of 3 · Too much of a good thing",
+            title="Crank the alive bonus way up (try + 5 or more) and train.",
+            body="If just being alive pays far more than the penalties cost, why bother staying"
+            " centered or steady? <strong>Predict</strong> what the agent will do when survival"
+            " is worth so much more than good form, then train and see the lazy agent for"
+            " yourself.",
+        )
+    else:
+        stage = "done"
+        render_guided_prompt(
+            st,
+            step_label="Nice work",
+            title="Reward design is a balancing act.",
+            body="Too few positives and the agent gives up to stop the penalties; too large a"
+            " survival bonus and it stops caring about doing the task well. A good reward keeps"
+            " those forces in tension. Continue when you are ready.",
+            tone="success",
+        )
+
+    st.session_state.setdefault("reward_demo_builder_terms", [])
+    component_value = drag_canvas_component(
+        mode="reward",
+        title="Reward function",
+        pool=reward_pool,
+        value=list(st.session_state["reward_demo_builder_terms"]),
+        key="reward_demo_drag_canvas",
+        height=520,
+        reset_id="reward-demo-builder",
+    )
+    if isinstance(component_value, list):
+        st.session_state["reward_demo_builder_terms"] = component_value
+
+    reward_tokens, demo_reward_terms = normalize_reward_builder_items(
+        list(st.session_state["reward_demo_builder_terms"])
+    )
+    alive_weight = _alive_factor(demo_reward_terms)
+
+    can_train_reward = bool(demo_reward_terms)
+    if st.button(
+        "Train with your reward",
+        type="primary",
+        use_container_width=True,
+        disabled=not can_train_reward,
+        key="reward_demo_train_button",
+    ):
+        st.session_state["reward_demo_train_requested"] = True
+    if not can_train_reward:
+        st.caption("Build a reward function above before training.")
+
+    train_reward_demo = (
+        bool(st.session_state.get("reward_demo_train_requested", False))
+        and can_train_reward
+    )
+    if train_reward_demo:
+        st.session_state.pop("reward_demo_train_requested", None)
+        reward_for_run = {"reward_terms": demo_reward_terms, "reward_tokens": reward_tokens}
+        with st.spinner("Training a Q-learning agent with your reward (this one trains longer)..."):
+            run_result = cached_controlled_demo_run(
+                st,
+                cache_name="controlled_reward_demo_cache",
+                features=DEFAULT_OBSERVATION_FEATURES,
+                action_forces=ACTION_PRESETS["Standard left/right"],
+                seed=21,
+                reward_weights=reward_for_run,
+                episodes=REWARD_LESSON_EPISODES,
+                q_bins=REWARD_LESSON_Q_BINS,
+                learning_rate=REWARD_LESSON_LEARNING_RATE,
+                epsilon_min=REWARD_LESSON_EPSILON_MIN,
+            )
+        run_result["alive_weight"] = alive_weight
+        st.session_state["reward_demo_playground_run"] = run_result
+        # Advance the lesson based on what this run demonstrated.
+        score = float(run_result.get("score", 0.0))
+        if not saw_penalty_fail and alive_weight <= 0 and score < 80:
+            st.session_state["reward_lesson_saw_penalty_fail"] = True
+        elif not saw_alive_balance and 0 < alive_weight <= 2 and score >= 80:
+            st.session_state["reward_lesson_saw_alive_balance"] = True
+        elif not saw_lazy and alive_weight >= 5:
+            st.session_state["reward_lesson_saw_lazy"] = True
+        request_streamlit_rerun(st)
+
+    reward_run = st.session_state.get("reward_demo_playground_run")
+    if isinstance(reward_run, dict) and reward_run.get("gif_bytes"):
+        score = int(round(float(reward_run.get("score", 0.0))))
+        run_alive = float(reward_run.get("alive_weight", 0.0))
+        st.markdown(
+            f'<div class="reward-slide-note"><strong>Your reward, trained:</strong> the agent'
+            f' balanced for <strong>{score}</strong> steps (out of {DEMO_MAX_STEPS}).</div>',
+            unsafe_allow_html=True,
+        )
+        st.image(reward_run["gif_bytes"], width="stretch")
+
+        # Training curve: how long each episode survived as training progressed.
+        lengths = reward_run.get("episode_lengths")
+        if isinstance(lengths, list) and lengths:
+            st.caption("Episode length over training (how long the pole stayed up each episode):")
+            st.line_chart({"steps balanced": [float(v) for v in lengths]}, height=200)
+
+        # Explain what just happened, matched to the run.
+        if run_alive <= 0 and score < 80:
+            st.warning(
+                "See the curve? It never really climbs — the agent gives up almost immediately."
+                " With an all-penalty reward, every step alive only adds more negative reward, so"
+                " the fastest way to stop losing points is to **let the pole fall right away**."
+                " The reward is doing exactly what you wrote — it just rewards quitting. **Now go"
+                " to step 2 and add a +1 alive term.**"
+            )
+        elif 0 < run_alive <= 2 and score >= 80:
+            st.success(
+                "Now the curve climbs and the pole stays up. The **+1 alive** term means every"
+                " step in the game is worth more than the small penalties for drifting or"
+                " rotating, so the agent finally has a reason to keep balancing while still being"
+                " nudged toward the center and steady."
+            )
+        elif run_alive >= 5:
+            st.warning(
+                "Watch closely: the agent survives, but it stops trying to stay centered or"
+                " steady — it does the bare minimum. Because **being alive pays so much more than"
+                " the penalties cost**, sloppy balancing is still a great deal. This is the"
+                " **lazy-agent problem**: an oversized survival bonus drowns out everything you"
+                " actually care about."
+            )
+        else:
+            st.info(
+                f"Balanced for {score} steps. Keep adjusting the alive bonus and the penalties"
+                " to see how the balance of forces changes the behavior."
+            )
+
+
 def render_reward_slideshow_page(st: Any) -> None:
     st.markdown(
         """
@@ -2793,144 +3014,7 @@ def render_reward_slideshow_page(st: Any) -> None:
         unsafe_allow_html=True,
     )
 
-    st.markdown(GUIDED_PROMPT_STYLE, unsafe_allow_html=True)
-    st.subheader("Your turn: design a reward function")
-    render_guided_prompt(
-        st,
-        step_label="Try it",
-        title="Build a reward that keeps the pole upright and the cart centered.",
-        body="Reward the agent for staying near the ideal pose. Drag in <strong>cart position</strong>"
-        " and <strong>pole angle</strong> and penalize drifting and leaning &mdash; use"
-        " <strong>absolute value</strong> (so left and right count the same) with a"
-        " <strong>negative</strong> sign in front."
-        "<br><br><strong>Watch out:</strong> if your reward is <em>only</em> penalties (every"
-        " step scores negative), the agent can end the episode early to stop collecting"
-        " negative reward &mdash; falling quickly beats surviving and accumulating more"
-        " penalty. To avoid this, add a <strong>positive</strong> term for staying in the game,"
-        " like a <strong>+1 alive</strong> bonus or <strong>cos(pole angle)</strong> (which is"
-        " positive when upright). The reward for staying up has to outweigh the penalties.",
-    )
-
-    reward_pool = [
-        {
-            "id": signal,
-            "label": REWARD_SIGNAL_LABELS[signal],
-            "group": group,
-            "scales": REWARD_SCALE_LABELS if signal in REWARD_SCALE_SIGNALS else {},
-            "default_scale": default_reward_scale(signal),
-        }
-        for group, signals in {
-            "Episode": ["alive", "fell"],
-            "Cart state": ["cart_position", "cart_velocity"],
-            "Pole state": ["pole_angle", "pole_angular_velocity"],
-        }.items()
-        for signal in signals
-    ]
-    st.session_state.setdefault("reward_demo_builder_terms", [])
-    component_value = drag_canvas_component(
-        mode="reward",
-        title="Reward function",
-        pool=reward_pool,
-        value=list(st.session_state["reward_demo_builder_terms"]),
-        key="reward_demo_drag_canvas",
-        height=520,
-        reset_id="reward-demo-builder",
-    )
-    if isinstance(component_value, list):
-        st.session_state["reward_demo_builder_terms"] = component_value
-
-    reward_tokens, demo_reward_terms = normalize_reward_builder_items(
-        list(st.session_state["reward_demo_builder_terms"])
-    )
-    signals_used = {str(term.get("signal", "")) for term in demo_reward_terms}
-    has_cart = "cart_position" in signals_used
-    has_angle = "pole_angle" in signals_used
-
-    # Check the behavior of the reward they actually built, not its structure:
-    # does drifting off-center and leaning over each LOWER the reward?
-    weights = {"reward_terms": demo_reward_terms, "reward_tokens": reward_tokens}
-
-    def demo_reward(state: tuple[float, float, float, float]) -> float:
-        return reward_function((0, 0, 0, 0), 0, 0.0, state, 1.0, False, False, weights)
-
-    centered = demo_reward((0.0, 0.0, 0.0, 0.0))
-    drifted = demo_reward((1.6, 0.0, 0.0, 0.0))        # cart far from center
-    leaning = demo_reward((0.0, 0.0, 0.7, 0.0))         # pole tilted over
-    drift_left = demo_reward((-1.6, 0.0, 0.0, 0.0))     # opposite side, same penalty?
-    lean_left = demo_reward((0.0, 0.0, -0.7, 0.0))
-
-    penalizes_drift = drifted < centered - 1e-6 and abs(drift_left - drifted) < 1e-6
-    penalizes_lean = leaning < centered - 1e-6 and abs(lean_left - leaning) < 1e-6
-    # Is staying in the ideal pose actually worth it? If even the best state pays
-    # a negative reward, the agent is better off ending the episode early, so a
-    # good balance reward should be positive when upright.
-    rewards_survival = centered > 1e-6
-
-    if has_cart and has_angle and penalizes_drift and penalizes_lean and rewards_survival:
-        st.success(
-            "Nice — drifting and leaning lower the reward (equally on both sides), AND staying"
-            " centered and upright still pays a positive reward. The agent has a reason to keep"
-            " the pole up instead of giving up."
-        )
-    elif has_cart and has_angle and penalizes_drift and penalizes_lean and not rewards_survival:
-        st.warning(
-            "Careful — your reward is all penalties, so even the perfect pose scores ≤ 0. The"
-            " agent can stop the pain by falling over on purpose (ending the episode fast). Add a"
-            " **positive** term for staying up — e.g. **+1 alive** or **cos(pole angle)** — that"
-            " outweighs the penalties."
-        )
-    elif has_cart and has_angle:
-        st.info(
-            "You have cart position and pole angle in there. Make drifting and leaning each"
-            " **lower** the reward equally on both sides (absolute value + a negative sign), and"
-            " add a **positive** term (like **+1 alive**) so staying upright is worth it."
-        )
-    else:
-        st.caption("Drag in cart position and pole angle to build the reward described above.")
-
-    # Let them train their own reward and watch the pendulum behave.
-    can_train_reward = bool(demo_reward_terms)
-    if st.button(
-        "Train with your reward",
-        type="primary",
-        use_container_width=True,
-        disabled=not can_train_reward,
-        key="reward_demo_train_button",
-    ):
-        st.session_state["reward_demo_train_requested"] = True
-    if not can_train_reward:
-        st.caption("Build a reward function above before training.")
-
-    train_reward_demo = (
-        bool(st.session_state.get("reward_demo_train_requested", False))
-        and can_train_reward
-    )
-    if train_reward_demo:
-        st.session_state.pop("reward_demo_train_requested", None)
-        reward_for_run = {"reward_terms": demo_reward_terms, "reward_tokens": reward_tokens}
-        # Vary the seed each Train so results are not anchored to one run of a
-        # single fixed seed.
-        run_seed = random.randint(1, 999_999)
-        with st.spinner("Training a Q-learning agent with your reward..."):
-            st.session_state["reward_demo_playground_run"] = cached_controlled_demo_run(
-                st,
-                cache_name="controlled_reward_demo_cache",
-                features=DEFAULT_OBSERVATION_FEATURES,
-                action_forces=ACTION_PRESETS["Standard left/right"],
-                seed=run_seed,
-                reward_weights=reward_for_run,
-            )
-        request_streamlit_rerun(st)
-
-    reward_run = st.session_state.get("reward_demo_playground_run")
-    if isinstance(reward_run, dict) and reward_run.get("gif_bytes"):
-        st.markdown(
-            f'<div class="reward-slide-note"><strong>Your reward, trained:</strong> the agent'
-            f' balanced for {int(round(float(reward_run.get("score", 0.0))))} steps'
-            f' (out of {DEMO_MAX_STEPS}). Watch where it tries to keep the cart and pole.</div>',
-            unsafe_allow_html=True,
-        )
-        st.image(reward_run["gif_bytes"], width="stretch")
+    render_reward_design_exercise(st)
 
     st.markdown(
         """

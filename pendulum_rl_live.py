@@ -1969,20 +1969,24 @@ def build_lazy_comparison(*, seed: int = 21) -> dict[str, Any]:
 
     # Good agent learned WITH the fall cutoff (step 2); lazy agent learned with
     # the cutoff removed and a huge alive bonus (step 3).
-    good_gif, good_up = _render_policy_no_terminate(train(good_reward, True), seed + 200)
-    lazy_gif, lazy_up = _render_policy_no_terminate(train(lazy_reward, False), seed + 200)
+    good_result = train(good_reward, True)
+    lazy_result = train(lazy_reward, False)
+    good_gif, good_up = _render_policy_no_terminate(good_result, seed + 200)
+    lazy_gif, lazy_up = _render_policy_no_terminate(lazy_result, seed + 200)
     return {
         "version": CONTROLLED_DEMO_VERSION,
         "good_gif": good_gif,
         "good_upright": good_up,
+        "good_curve": list(good_result.returns),
         "lazy_gif": lazy_gif,
         "lazy_upright": lazy_up,
+        "lazy_curve": list(lazy_result.returns),
     }
 
 
 # Bump when the lazy-comparison rendering/measurement logic changes, so stale
 # cached results (e.g. a lazy clip mislabeled as 100% upright) are rebuilt.
-LAZY_COMPARISON_VERSION = "lazy-cmp-v2-tilted"
+LAZY_COMPARISON_VERSION = "lazy-cmp-v3-curves"
 
 
 def cached_lazy_comparison(st: Any, *, seed: int = 21) -> dict[str, Any]:
@@ -3073,8 +3077,9 @@ def render_reward_design_exercise(st: Any) -> None:
                 "There it is. For this run we turned off the rule that ends the episode when the"
                 " pole falls — so the episode always runs the full length no matter what. Now the"
                 f" big alive bonus pays out every single step whether the pole is up or down, and"
-                f" the agent figured that out: it stopped trying and let the pole hang (upright"
-                f" only {upright_pct}% of the time), still collecting almost the same reward.\n\n"
+                f" the agent figured that out: it stopped balancing and just lets the pole swing"
+                f" around (upright only {upright_pct}% of the time), still raking in almost the"
+                f" same reward.\n\n"
                 "**This is the lazy-agent problem.** Normally the episode *cutting short* when the"
                 " pole falls is what made the alive bonus work — to keep earning +alive, the agent"
                 " *had* to keep the pole up, so the bonus quietly reinforced balancing. Remove that"
@@ -3098,15 +3103,23 @@ def render_reward_design_exercise(st: Any) -> None:
                 )
                 if comparison.get("good_gif"):
                     st.image(comparison["good_gif"], width="stretch")
+                good_curve = comparison.get("good_curve")
+                if isinstance(good_curve, list) and good_curve:
+                    st.caption("Reward per episode while training:")
+                    st.line_chart({"+1 alive": [float(v) for v in good_curve]}, height=180)
             with lazy_col:
                 st.markdown(
                     f'<div class="reward-slide-note"><strong>+10 alive</strong> (lazy):'
                     f' upright <strong>{int(round(comparison["lazy_upright"] * 100))}%</strong>'
-                    f' of the time — it lets the pole hang.</div>',
+                    f' of the time — it lets the pole swing freely.</div>',
                     unsafe_allow_html=True,
                 )
                 if comparison.get("lazy_gif"):
                     st.image(comparison["lazy_gif"], width="stretch")
+                lazy_curve = comparison.get("lazy_curve")
+                if isinstance(lazy_curve, list) and lazy_curve:
+                    st.caption("Reward per episode while training:")
+                    st.line_chart({"+10 alive": [float(v) for v in lazy_curve]}, height=180)
         elif run_alive <= 0 and score < 80:
             st.warning(
                 "Look at the reward curve: it stays **negative and never climbs**. With an"

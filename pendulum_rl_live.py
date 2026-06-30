@@ -2647,27 +2647,37 @@ def _alive_factor(terms: list[dict[str, Any]]) -> float:
     )
 
 
-def _penalized_signals(terms: list[dict[str, Any]]) -> set[str]:
-    """Signals that appear with a negative factor (i.e. penalized)."""
-    return {
-        str(t.get("signal"))
-        for t in terms
-        if float(t.get("factor", 0.0)) < 0
-    }
+def _penalizes_signal(weights: dict[str, Any], signal: str) -> bool:
+    """True if moving `signal` away from 0 LOWERS the reward — checked by
+    evaluating the built reward, so it works whether the negative sign sits on
+    the term or on an absolute-value block wrapping it."""
+    idx = {"cart_position": 0, "cart_velocity": 1, "pole_angle": 2,
+           "pole_angular_velocity": 3}.get(signal)
+    if idx is None:
+        return False
+    base = [0.0, 0.0, 0.0, 0.0]
+    bumped = list(base)
+    # Bump within the normalized range so it registers on the reward's scale.
+    bumped[idx] = 1.2 if signal in ("cart_position", "cart_velocity") else 0.6
+    r0 = reward_function((0, 0, 0, 0), 0, 0.0, tuple(base), 1.0, False, False, weights)
+    r1 = reward_function((0, 0, 0, 0), 0, 0.0, tuple(bumped), 1.0, False, False, weights)
+    return r1 < r0 - 1e-9
 
 
 def check_reward_for_stage(
-    stage: str, terms: list[dict[str, Any]]
+    stage: str, terms: list[dict[str, Any]], tokens: list[Any] | None = None
 ) -> tuple[bool, str]:
     """Validate the built reward against what the current step asks for.
 
     Returns (is_correct, message). The message is a hint shown when the reward
-    is wrong, so the student gets specific feedback before training.
+    is wrong, so the student gets specific feedback before training. Penalty
+    checks are behavioral (does the reward drop when the value moves away from
+    0?) so they work no matter how absolute value / signs are assembled.
     """
     alive = _alive_factor(terms)
-    penalized = _penalized_signals(terms)
-    has_cart_pen = "cart_position" in penalized
-    has_polevel_pen = "pole_angular_velocity" in penalized
+    weights = {"reward_terms": terms, "reward_tokens": tokens or []}
+    has_cart_pen = _penalizes_signal(weights, "cart_position")
+    has_polevel_pen = _penalizes_signal(weights, "pole_angular_velocity")
 
     if stage == "penalty":
         if alive > 0:
@@ -2683,11 +2693,11 @@ def check_reward_for_stage(
             if not has_polevel_pen:
                 missing.append("the **pole's rotation** (pole angular velocity)")
             return False, (
-                "Not yet — you need to penalize " + " and ".join(missing) + "."
-                " Reward should get *worse* the farther the cart drifts and the faster the pole"
-                " spins. Drag in those signals and put a **negative** sign in front of each."
+                "Not yet — your reward needs to get *worse* when " + " and ".join(missing)
+                + " grows. Reward should drop the farther the cart drifts and the faster the pole"
+                " spins."
                 "\n\n**Hint:** distance is never negative, so wrap each in **absolute value**"
-                " ( the `| |` blocks ) and give it a negative factor."
+                " ( the `| |` blocks ) and give it a **negative** factor."
             )
         return True, ""
 
@@ -2813,7 +2823,7 @@ def render_reward_design_exercise(st: Any) -> None:
     # Validate the built reward against the current step BEFORE allowing a train,
     # so a wrong reward gets an immediate hint instead of a wasted run.
     has_terms = bool(demo_reward_terms)
-    reward_ok, reward_hint = check_reward_for_stage(stage, demo_reward_terms)
+    reward_ok, reward_hint = check_reward_for_stage(stage, demo_reward_terms, reward_tokens)
 
     if st.button(
         "Train with your reward",

@@ -113,17 +113,34 @@
       color:#fff; font-weight:900; display:flex; align-items:center; justify-content:center; }
     .qcallout { margin-top:14px; padding:14px 16px; border-radius:12px; background:var(--accent-soft);
       border:1px solid #bfdbfe; font-size:1.04rem; line-height:1.5; }
-    .explore-demo { margin:10px 0 2px; max-width:480px; }
-    #eps-slider { width:100%; }
-    .explore-readout { margin-top:6px; }
-    .explore-bar { display:flex; height:18px; border-radius:999px; overflow:hidden; border:1px solid var(--line); margin:6px 0; }
-    .explore-seg { height:100%; }
+    /* Timeline + Q-table visualization */
+    .timeline { margin:10px 0 14px; }
+    #time-slider { width:100%; }
+    .timeline-ends { display:flex; justify-content:space-between; font-size:0.8rem; color:var(--muted); margin-top:2px; }
+    .time-label { font-weight:800; margin-top:6px; }
+    .qviz-row { display:grid; grid-template-columns:1.4fr 1fr; gap:16px; align-items:start; }
+    @media (max-width:680px){ .qviz-row { grid-template-columns:1fr; } }
+    .qtable-card, .strategy-card { border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:#fcfdff; }
+    .qtable-title { font-weight:800; font-size:0.96rem; margin-bottom:8px; }
+    .qtable-foot { font-size:0.78rem; color:var(--muted); margin-top:8px; line-height:1.4; }
+    table.qtbl { width:100%; border-collapse:separate; border-spacing:4px; }
+    table.qtbl th { font-size:0.74rem; color:var(--muted); font-weight:700; padding:2px; }
+    table.qtbl td.obs { white-space:nowrap; }
+    .qmini { display:inline-flex; gap:2px; vertical-align:middle; }
+    .qmini i { width:18px; height:18px; border-radius:3px; border:1px solid #e4e7ec; display:inline-flex;
+      align-items:center; justify-content:center; font-size:0.7rem; font-style:normal; background:#fff; }
+    .qmini i.me { background:#dbeafe; border-color:var(--accent); }
+    .qcellv { border-radius:6px; text-align:center; font-size:0.78rem; font-weight:800; padding:6px 2px;
+      font-variant-numeric:tabular-nums; transition:background .25s, color .25s; }
+    .qcellv.best { outline:2px solid #111827; }
+    .explore-bar { display:flex; height:20px; border-radius:999px; overflow:hidden; border:1px solid var(--line); margin:4px 0 6px; }
+    .explore-seg { height:100%; transition:width .25s; }
     .explore-seg.explore { background:#f59e0b; }
     .explore-seg.greedy { background:#2563eb; }
-    .explore-legend { font-size:0.84rem; color:var(--muted); }
+    .explore-legend { font-size:0.84rem; color:var(--muted); line-height:1.7; }
     .explore-legend .dot { display:inline-block; width:10px; height:10px; border-radius:999px; margin-right:4px; vertical-align:middle; }
     .dot.explore { background:#f59e0b; } .dot.greedy { background:#2563eb; }
-    #eps-label { font-weight:800; }
+    .eps-label { font-weight:800; }
   </style>
 </head>
 <body>
@@ -276,21 +293,32 @@
 
       <div class="qstep">
         <div class="qstep-num">3</div>
-        <div>
+        <div style="flex:1;">
           <h4>Early on it explores; later it exploits</h4>
           <p class="note">At first the notebook is useless, so guessing randomly is actually smart —
           that's how it <b>discovers</b> what's out there (you did this too, wandering on round 1).
           As the notebook fills in, it trusts it more: it stops guessing and starts picking the
-          highest-scoring move — being <b>greedy</b>. Slide between the two:</p>
-          <div class="explore-demo">
-            <input type="range" id="eps-slider" min="0" max="100" value="100" />
-            <div class="explore-readout">
-              <span id="eps-label"></span>
+          highest-scoring move — being <b>greedy</b>. <b>Drag the timeline</b> to watch training
+          unfold:</p>
+          <div class="timeline">
+            <input type="range" id="time-slider" min="0" max="100" value="0" />
+            <div class="timeline-ends"><span>start of training</span><span>fully trained</span></div>
+            <div class="time-label" id="time-label"></div>
+          </div>
+          <div class="qviz-row">
+            <div class="qtable-card">
+              <div class="qtable-title">The Q-table (the notebook)</div>
+              <div id="qtable-viz"></div>
+              <div class="qtable-foot">Greener = this move looks better here · redder = worse · grey = not learned yet</div>
+            </div>
+            <div class="strategy-card">
+              <div class="qtable-title">How it's choosing moves</div>
               <div class="explore-bar"><div id="eps-explore" class="explore-seg explore"></div><div id="eps-greedy" class="explore-seg greedy"></div></div>
-              <div class="explore-legend"><span class="dot explore"></span>random exploring &nbsp;&nbsp;<span class="dot greedy"></span>greedy (use what it learned)</div>
+              <div id="eps-label" class="eps-label"></div>
+              <div class="explore-legend"><span class="dot explore"></span>random (exploring)<br><span class="dot greedy"></span>greedy (using the notebook)</div>
+              <p class="note" id="eps-note" style="margin-top:10px;"></p>
             </div>
           </div>
-          <p class="note" id="eps-note" style="margin-top:6px;"></p>
         </div>
       </div>
 
@@ -395,6 +423,31 @@
       return { nx, ny, reward:r, done, died, won };
     }
     function ensQ(Q,k){ if(!Q[k]) Q[k]={up:0,down:0,left:0,right:0}; return Q[k]; }
+
+    // A few fixed neighbor-patterns to display in the Q-table timeline. Each is
+    // resolved to a real learned entry (any move-history) at snapshot time.
+    const VIZ_OBS=[
+      { nb:{up:EMPTY,down:GEM  ,left:EMPTY,right:EMPTY} },
+      { nb:{up:EMPTY,down:SPIKE,left:EMPTY,right:EMPTY} },
+      { nb:{up:EMPTY,down:EMPTY,left:SPIKE,right:GEM  } },
+      { nb:{up:GEM  ,down:EMPTY,left:EMPTY,right:SPIKE} },
+      { nb:{up:EMPTY,down:EMPTY,left:EMPTY,right:EMPTY} },
+    ];
+    // For a VIZ neighbor-pattern, find an actual learned Q entry that matches
+    // those 4 neighbors (any move-history), preferring the most-decided one.
+    function resolveVizRow(Q, nb){
+      const pref=[nb.up,nb.down,nb.left,nb.right].join(",")+",";
+      let best=null,bestMargin=-1;
+      for(const k in Q){
+        if(k.slice(0,pref.length)!==pref) continue;
+        const q=Q[k]; const v=[q.up,q.down,q.left,q.right].sort((a,b)=>b-a);
+        const margin=v[0]-v[1];
+        if(margin>bestMargin){ bestMargin=margin; best=q; }
+      }
+      return best;
+    }
+    // Snapshots of the VIZ_OBS Q-values across training: [{ep, eps, rows:[{up,down,left,right,seen}]}]
+    let qSnapshots=[];
     function greedyAct(Q,b,ax,ay,hist){
       const q=Q[stateKey(b,ax,ay,hist)];
       if(!q) return ACTIONS[Math.floor(Math.random()*4)];
@@ -571,6 +624,16 @@
       let ep=0; const TOTAL=8000;
       const epEl=document.getElementById("scratch-ep");
       const noteEl=document.getElementById("scratch-note");
+      qSnapshots=[];
+
+      function snapshot(eps){
+        qSnapshots.push({ ep, eps, rows: VIZ_OBS.map(o=>{
+          const q=resolveVizRow(Q, o.nb);
+          return q ? {up:q.up,down:q.down,left:q.left,right:q.right, seen:true}
+                   : {up:0,down:0,left:0,right:0, seen:false};
+        }) });
+      }
+      snapshot(1); // blank-notebook starting point
 
       function trainEpisode(eps){
         const b=makeBoard(); let a={x:0,y:0}, m=MAX_MOVES, hist=HIST0.slice();
@@ -612,11 +675,12 @@
       }
 
       function loop(){
-        if(ep>=TOTAL){ finishWithFullRound(); return; }
+        if(ep>=TOTAL){ snapshot(0.08); finishWithFullRound(); return; }
         const eps=Math.max(0.08, 1 - ep/5000);
         const batch = ep===0?1:400;
         for(let i=0;i<batch;i++){ trainEpisode(eps); ep++; }
         epEl.textContent="Episode "+ep;
+        snapshot(eps);
         const res=evalAgent();
         curve.push({x:ep, y:res.avg});
         renderLineChart("scratch-graph", curve, {color:"#60a5fa", xlabel:"episodes →"});
@@ -685,29 +749,66 @@
       document.getElementById("policymap-note").innerHTML=`These rows are pulled straight from the agent's learned table (it holds <b>${keys.length.toLocaleString()}</b> situations in all). A policy is nothing more than this: a best action for every observation.`;
     }
     document.getElementById("policymap-continue").onclick=()=>{
-      show("sec-qlearning"); document.getElementById("sec-qlearning").scrollIntoView({behavior:"smooth",block:"start"}); setHeight();
+      show("sec-qlearning"); renderQTimeline();
+      document.getElementById("sec-qlearning").scrollIntoView({behavior:"smooth",block:"start"}); setHeight();
     };
 
-    // ---- Q-learning explore/greedy slider -----------------------------------
-    (function(){
-      const sl=document.getElementById("eps-slider");
-      const label=document.getElementById("eps-label");
-      const note=document.getElementById("eps-note");
+    // ---- Q-learning timeline: scrub training; show Q-table + explore/greedy --
+    const VIZ_CELL_GLYPH={[GEM]:"💎",[SPIKE]:"🔺",[GOAL]:"🚩",[EMPTY]:"",[OFF]:"⛔"};
+    function qColor(v){
+      // grey if effectively unlearned; green for high, red for low
+      if(Math.abs(v)<0.4) return {bg:"#eef2f7", fg:"#94a3b8"};
+      const t=Math.max(-1,Math.min(1, v/40));      // -1..1
+      if(t>=0){ const a=0.15+0.55*t; return {bg:`rgba(16,185,129,${a})`, fg:"#064e3b"}; }
+      const a=0.15+0.55*(-t); return {bg:`rgba(239,68,68,${a})`, fg:"#7f1d1d"};
+    }
+    function renderQTimeline(){
+      const sl=document.getElementById("time-slider");
+      const timeLabel=document.getElementById("time-label");
+      const viz=document.getElementById("qtable-viz");
       const expSeg=document.getElementById("eps-explore");
       const grdSeg=document.getElementById("eps-greedy");
+      const epsLabel=document.getElementById("eps-label");
+      const note=document.getElementById("eps-note");
+      if(!qSnapshots.length) return;
+
+      function miniObs(nb){
+        const slot=(p)=> p==="me" ? `<i class="me">🙂</i>`
+          : p===null ? `<i style="border:none;background:transparent;"></i>`
+          : `<i>${VIZ_CELL_GLYPH[nb[p]]||""}</i>`;
+        return `<span class="qmini">${[null,"up",null].map(slot).join("")}</span>`
+             + `<span class="qmini">${["left","me","right"].map(slot).join("")}</span>`
+             + `<span class="qmini">${[null,"down",null].map(slot).join("")}</span>`;
+      }
       function paint(){
-        const eps=Number(sl.value);            // % of moves that are random
-        expSeg.style.width=eps+"%";
-        grdSeg.style.width=(100-eps)+"%";
-        label.textContent=`${eps}% random · ${100-eps}% greedy`;
-        if(eps>=80) note.innerHTML="<b>Just starting out.</b> The notebook is nearly blank, so the agent explores almost every move — like you wandering blindly on round 1.";
-        else if(eps>=35) note.innerHTML="<b>Mid-training.</b> It mostly uses what it has learned but still explores sometimes, in case there's a better move it hasn't tried.";
-        else if(eps>5) note.innerHTML="<b>Getting confident.</b> It trusts its notebook now and only explores occasionally.";
-        else note.innerHTML="<b>Trained.</b> It almost always picks the highest-scoring move — fully greedy, like the agent you just watched finish.";
+        const frac=Number(sl.value)/100;
+        const idx=Math.min(qSnapshots.length-1, Math.round(frac*(qSnapshots.length-1)));
+        const snap=qSnapshots[idx];
+        const epsPct=Math.round(snap.eps*100);
+        timeLabel.textContent=`Episode ${snap.ep.toLocaleString()} of ${ (qSnapshots[qSnapshots.length-1].ep).toLocaleString() }`;
+        // Q-table
+        let html=`<table class="qtbl"><tr><th>what it sees</th><th>⬆️</th><th>⬇️</th><th>⬅️</th><th>➡️</th></tr>`;
+        for(let r=0;r<VIZ_OBS.length;r++){
+          const row=snap.rows[r];
+          const best=Math.max(row.up,row.down,row.left,row.right);
+          const cell=(v)=>{ const c=qColor(row.seen?v:0);
+            const isBest=row.seen && v===best && Math.abs(v)>=0.4;
+            return `<td><div class="qcellv ${isBest?"best":""}" style="background:${c.bg};color:${c.fg};">${row.seen&&Math.abs(v)>=0.05?v.toFixed(0):"·"}</div></td>`; };
+          html+=`<tr><td class="obs">${miniObs(VIZ_OBS[r].nb)}</td>${cell(row.up)}${cell(row.down)}${cell(row.left)}${cell(row.right)}</tr>`;
+        }
+        html+=`</table>`;
+        viz.innerHTML=html;
+        // explore/greedy
+        expSeg.style.width=epsPct+"%"; grdSeg.style.width=(100-epsPct)+"%";
+        epsLabel.textContent=`${epsPct}% random · ${100-epsPct}% greedy`;
+        if(epsPct>=80) note.innerHTML="<b>Just starting out.</b> The notebook is nearly blank (all grey), so it explores almost every move — like you wandering on round 1.";
+        else if(epsPct>=35) note.innerHTML="<b>Mid-training.</b> Cells are filling in. It mostly uses the notebook but still explores sometimes, hunting for better moves.";
+        else if(epsPct>10) note.innerHTML="<b>Getting confident.</b> Clear winners (green) have appeared; it explores only occasionally now.";
+        else note.innerHTML="<b>Trained.</b> The good moves are locked in. It almost always goes greedy — picks the greenest cell in each row.";
       }
       sl.addEventListener("input",paint);
       paint();
-    })();
+    }
     document.getElementById("qlearning-continue").onclick=()=>{
       show("sec-done"); document.getElementById("sec-done").scrollIntoView({behavior:"smooth",block:"start"}); setHeight();
     };

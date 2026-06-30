@@ -470,7 +470,7 @@ DEMO_Q_BINS = 6
 # reward reliably balances (so students can trust what they see). Tabular
 # Q-learning on the 4D state needs more bins and more episodes than the snappy
 # observation/action demos use.
-REWARD_LESSON_EPISODES = 2500
+REWARD_LESSON_EPISODES = 1500
 REWARD_LESSON_Q_BINS = 10
 REWARD_LESSON_LEARNING_RATE = 0.1
 REWARD_LESSON_EPSILON_MIN = 0.01
@@ -2632,19 +2632,30 @@ def render_reward_design_exercise(st: Any) -> None:
     saw_penalty_fail = bool(st.session_state.get("reward_lesson_saw_penalty_fail"))
     saw_alive_balance = bool(st.session_state.get("reward_lesson_saw_alive_balance"))
     saw_lazy = bool(st.session_state.get("reward_lesson_saw_lazy"))
+    # How many times they've trained a reward that misses the step-1 idea.
+    step1_misses = int(st.session_state.get("reward_lesson_step1_misses", 0))
 
     # Decide the current stage and show the matching prompt.
     if not saw_penalty_fail:
         stage = "penalty"
+        hint = ""
+        if step1_misses >= 2:
+            hint = (
+                "<br><br><strong>Hint:</strong> &lsquo;far from&rsquo; means distance, and"
+                " distance is never negative &mdash; the <strong>absolute value</strong> blocks"
+                " (<code>| |</code>) give you that. Put a <strong>negative</strong> factor in"
+                " front of each so being far away lowers the reward."
+            )
         render_guided_prompt(
             st,
-            step_label="Step 1 of 3 · Penalties only",
-            title="Build  − | cart position |  −  | pole velocity |  and train it.",
-            body="Tell the agent what you do <em>not</em> want: drifting from the center and the"
-            " pole rotating. Drag in <strong>cart position</strong> and <strong>pole angular"
-            " velocity</strong>, wrap each in <strong>absolute value</strong>, and put a"
-            " <strong>negative</strong> sign in front of each. <strong>Predict</strong> how it"
-            " will do, then train and watch.",
+            step_label="Step 1 of 3 · Say what you want",
+            title="Reward the agent for staying centered and not rotating.",
+            body="Build a reward that gets <em>worse</em> the further the cart is from the center"
+            " and the faster the pole is rotating &mdash; in other words, penalize the cart&rsquo;s"
+            " <strong>distance from center</strong> and the pole&rsquo;s <strong>distance from"
+            " zero rotation</strong>. You have <strong>cart position</strong> and"
+            " <strong>pole angular velocity</strong> to work with. <strong>Predict</strong> how it"
+            " will do, then train and watch." + hint,
         )
     elif not saw_alive_balance:
         stage = "alive"
@@ -2653,7 +2664,7 @@ def render_reward_design_exercise(st: Any) -> None:
             step_label="Step 2 of 3 · Give it a reason to live",
             title="Now add a  + 1 · alive  term and train again.",
             body="Your last reward was all penalties, so every extra step only made the total"
-            " <em>worse</em> &mdash; the agent's best move was to end the episode fast. Add a"
+            " <em>worse</em> &mdash; the agent&rsquo;s best move was to end the episode fast. Add a"
             " <strong>+1 alive</strong> term so staying in the game finally pays. Now keeping the"
             " pole up earns +1 each step, while drifting and rotating cost a little. Train and"
             " compare.",
@@ -2663,12 +2674,12 @@ def render_reward_design_exercise(st: Any) -> None:
         stage = "lazy"
         render_guided_prompt(
             st,
-            step_label="Step 3 of 3 · Too much of a good thing",
-            title="Crank the alive bonus way up (try + 5 or more) and train.",
-            body="If just being alive pays far more than the penalties cost, why bother staying"
-            " centered or steady? <strong>Predict</strong> what the agent will do when survival"
-            " is worth so much more than good form, then train and see the lazy agent for"
-            " yourself.",
+            step_label="Step 3 of 3 · Push it further",
+            title="Now turn the alive bonus way up — try + 5 or more — and train.",
+            body="A +1 alive bonus worked nicely. What happens if you make surviving worth a lot"
+            " more than the penalties &mdash; say <strong>+5</strong> or <strong>+10</strong>"
+            " alive? <strong>Predict what the agent will do</strong>, then train and watch"
+            " closely.",
         )
     else:
         stage = "done"
@@ -2719,7 +2730,7 @@ def render_reward_design_exercise(st: Any) -> None:
     if train_reward_demo:
         st.session_state.pop("reward_demo_train_requested", None)
         reward_for_run = {"reward_terms": demo_reward_terms, "reward_tokens": reward_tokens}
-        with st.spinner("Training a Q-learning agent with your reward (this one trains longer)..."):
+        with st.spinner("Training a Q-learning agent with your reward..."):
             run_result = cached_controlled_demo_run(
                 st,
                 cache_name="controlled_reward_demo_cache",
@@ -2736,8 +2747,23 @@ def render_reward_design_exercise(st: Any) -> None:
         st.session_state["reward_demo_playground_run"] = run_result
         # Advance the lesson based on what this run demonstrated.
         score = float(run_result.get("score", 0.0))
-        if not saw_penalty_fail and alive_weight <= 0 and score < 80:
-            st.session_state["reward_lesson_saw_penalty_fail"] = True
+        penalty_signals = {
+            str(t.get("signal"))
+            for t in demo_reward_terms
+            if float(t.get("factor", 0.0)) < 0
+        }
+        built_penalty_reward = (
+            alive_weight <= 0
+            and {"cart_position", "pole_angular_velocity"} & penalty_signals
+        )
+        if not saw_penalty_fail:
+            if built_penalty_reward and score < 80:
+                st.session_state["reward_lesson_saw_penalty_fail"] = True
+                st.session_state["reward_lesson_step1_misses"] = 0
+            else:
+                # Didn't build the intended penalty-only reward yet; count the miss
+                # so we can offer a hint after a couple of tries.
+                st.session_state["reward_lesson_step1_misses"] = step1_misses + 1
         elif not saw_alive_balance and 0 < alive_weight <= 2 and score >= 80:
             st.session_state["reward_lesson_saw_alive_balance"] = True
         elif not saw_lazy and alive_weight >= 5:

@@ -187,8 +187,11 @@
       <h3>Watch an RL agent learn the same game</h3>
       <p class="lead">You just learned this game with no rulebook — only by trying things and watching
       your score. Now an <b>RL agent</b> does exactly that, from zero. It starts out moving randomly
-      and dying on spikes. As it plays thousands of rounds, it keeps what worked and drops what
-      didn't. Watch the <b>reward graph</b> climb as it gets better.</p>
+      and dying on spikes. As it plays thousands of <b>episodes</b>, it keeps what worked and drops
+      what didn't. Watch the <b>reward graph</b> climb as it gets better.</p>
+      <p class="note"><b>An episode is one full attempt at the game</b> — from the start square until
+      the agent reaches the flag, hits a spike, or runs out of moves. Each round you played was one
+      episode. The agent needs <i>thousands</i> of them to learn, so the counter below races ahead.</p>
       <div class="row" style="align-items:flex-start;">
         <div class="center">
           <canvas id="scratch-replay" width="300" height="300"></canvas>

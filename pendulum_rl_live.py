@@ -2187,8 +2187,9 @@ def render_pendulum_intro_page(st: Any) -> None:
         <div class="pendulum-intro-note">
             <strong>Use the ← and → arrow keys to push the cart. Drag the pole with
             your mouse to swing it.</strong> The agent never sees the picture &mdash;
-            it only sees the four numbers on the right, all mapped to the same
-            &minus;&pi; … &pi; scale. Notice how pushing the cart also tips the pole.
+            it only sees the four numbers on the right: position in meters,
+            velocity in meters per second, pole angle in radians, and pole angular
+            velocity in radians per second. Notice how pushing the cart also tips the pole.
             Play until the numbers make sense, then continue.
         </div>
         """,

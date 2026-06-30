@@ -139,7 +139,7 @@
       <div class="panel">
         <div>
           <h3>What the agent observes</h3>
-          <div class="sub">All values normalized to the &minus;&pi; … &pi; range.</div>
+          <div class="sub">Shown in physical units, just like the CartPole state.</div>
         </div>
         <div class="obs" id="obs"></div>
         <button class="reset" id="reset">Reset pendulum</button>
@@ -170,7 +170,7 @@
       streamlitMessage("streamlit:setFrameHeight", { height: root.scrollHeight + 6 });
     }
 
-    // Physical limits used for normalization to the -pi..pi range.
+    // Physical limits used to draw readable meters.
     const X_LIMIT = 2.4;        // cart position bound (m)
     const XDOT_LIMIT = 3.0;     // cart velocity bound (m/s)
     const THETADOT_LIMIT = 3.5; // pole angular velocity bound (rad/s)
@@ -192,28 +192,44 @@
       return r - PI;
     }
 
-    // Each observation, mapped to the -pi..pi range for display.
+    // Each observation in raw physical units.
     function observations() {
       return [
         {
           key: "cart_position",
           name: "Cart position",
-          value: clamp(state.x / X_LIMIT, -1, 1) * PI,
+          value: state.x,
+          unit: "m",
+          limit: X_LIMIT,
+          minLabel: "-2.4 m",
+          maxLabel: "2.4 m",
         },
         {
           key: "cart_velocity",
           name: "Cart velocity",
-          value: clamp(state.xDot / XDOT_LIMIT, -1, 1) * PI,
+          value: state.xDot,
+          unit: "m/s",
+          limit: XDOT_LIMIT,
+          minLabel: "-3.0 m/s",
+          maxLabel: "3.0 m/s",
         },
         {
           key: "pole_angle",
           name: "Pole angle",
           value: wrapAngle(state.theta),
+          unit: "rad",
+          limit: PI,
+          minLabel: "-π rad",
+          maxLabel: "π rad",
         },
         {
           key: "pole_angular_velocity",
-          name: "Pole velocity",
-          value: clamp(state.thetaDot / THETADOT_LIMIT, -1, 1) * PI,
+          name: "Pole angular velocity",
+          value: state.thetaDot,
+          unit: "rad/s",
+          limit: THETADOT_LIMIT,
+          minLabel: "-3.5 rad/s",
+          maxLabel: "3.5 rad/s",
         },
       ];
     }
@@ -304,7 +320,7 @@
       const obs = observations();
       const container = document.getElementById("obs");
       container.innerHTML = obs.map((o) => {
-        const frac = clamp(o.value / PI, -1, 1); // -1..1
+        const frac = clamp(o.value / o.limit, -1, 1); // -1..1
         const half = 50; // percent
         const widthPct = Math.abs(frac) * half;
         const leftPct = frac >= 0 ? half : half - widthPct;
@@ -312,13 +328,13 @@
           <div class="obs-row">
             <div class="obs-top">
               <span class="obs-name">${o.name}</span>
-              <span class="obs-val">${fmt(o.value)} rad</span>
+              <span class="obs-val">${fmt(o.value)} ${o.unit}</span>
             </div>
             <div class="obs-meter">
               <div class="obs-zero"></div>
               <div class="obs-fill" style="left:${leftPct}%; width:${widthPct}%;"></div>
             </div>
-            <div class="obs-scale"><span>&minus;π</span><span>0</span><span>π</span></div>
+            <div class="obs-scale"><span>${o.minLabel}</span><span>0</span><span>${o.maxLabel}</span></div>
           </div>
         `;
       }).join("");

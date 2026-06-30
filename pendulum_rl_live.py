@@ -1680,27 +1680,28 @@ def scroll_to_top_if_requested(st: Any) -> None:
 
 
 def render_rl_concepts_page(st: Any) -> None:
-    """Interactive intro to RL fundamentals before the pendulum-specific work."""
-    st.title("Reinforcement learning, from scratch")
+    """Interactive intro to RL fundamentals before the pendulum-specific work.
+
+    A scrollable playground: the student plays a Wumpus-style grid game seeing
+    only local observations, then trains an imitation agent and a reward-driven
+    Q-learning agent from their own play and watches both replay.
+    """
+    st.title("Reinforcement learning, by playing")
     st.markdown(
-        "Before we tackle the pendulum, let's build the core ideas. Step through"
-        " each slide and play with the interactive pieces."
+        "Before the pendulum, get a feel for RL by *being* the agent. Play the game,"
+        " then scroll down to train agents from how you played."
     )
-    value = rl_concepts_component()
-    finished = isinstance(value, dict) and value.get("done")
+    rl_concepts_component()
 
     back_column, next_column = st.columns(2)
     if back_column.button("Back", use_container_width=True):
         set_app_stage(st, "intro")
-    # The deck's final button reports done; the page also offers an explicit
-    # Continue so students are never stuck if the component value is missed.
-    advance = next_column.button(
+    if next_column.button(
         "Continue to the pendulum",
         type="primary",
         use_container_width=True,
         key="rl_concepts_continue",
-    )
-    if finished or advance:
+    ):
         set_app_stage(st, "background")
 
 

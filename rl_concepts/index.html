@@ -5,129 +5,150 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
-      --ink: #101828;
-      --muted: #475467;
-      --line: #d0d5dd;
-      --accent: #2563eb;
-      --accent-soft: #eff6ff;
-      --good: #12b76a;
-      --warn: #f79009;
-      --bg: #ffffff;
+      --ink: #101828; --muted: #475467; --line: #d0d5dd; --accent: #2563eb;
+      --accent-soft: #eff6ff; --good: #12b76a; --bad: #f04438; --warn: #f79009; --bg: #ffffff;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--ink); }
-    #root { padding: 6px; }
-    .deck {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: var(--bg);
-      overflow: hidden;
+    #root { padding: 4px; }
+    .section {
+      border: 1px solid var(--line); border-radius: 14px; background: var(--bg);
+      padding: 18px 20px; margin: 0 0 18px;
     }
-    .deck-head {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 18px;
-      background: linear-gradient(120deg, #172033, #285d62);
-      color: #fff;
-    }
-    .deck-head .kicker { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
-    .deck-head h2 { margin: 0; font-size: 1.4rem; }
-    .deck-dots { margin-left: auto; display: flex; gap: 6px; }
-    .deck-dot { width: 9px; height: 9px; border-radius: 999px; background: rgba(255,255,255,0.35); }
-    .deck-dot.active { background: #fff; }
-    .slide { padding: 20px 22px 8px; min-height: 380px; }
-    .lead { font-size: 1.18rem; line-height: 1.55; color: var(--ink); margin: 0 0 14px; }
-    .note { font-size: 1rem; line-height: 1.5; color: var(--muted); margin: 12px 0; }
-    .deck-foot {
-      display: flex; align-items: center; gap: 10px;
-      padding: 12px 18px; border-top: 1px solid var(--line); background: #f9fafb;
-    }
-    .btn {
-      border: 1px solid var(--line); background: #fff; color: var(--ink);
-      border-radius: 9px; padding: 0.55rem 1.1rem; font-weight: 700; font-size: 0.95rem; cursor: pointer;
-    }
+    .section h3 { margin: 0 0 6px; font-size: 1.3rem; }
+    .section .kicker { font-size: 0.76rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 800; }
+    .lead { font-size: 1.1rem; line-height: 1.55; color: var(--ink); margin: 8px 0 12px; }
+    .note { font-size: 0.98rem; line-height: 1.5; color: var(--muted); margin: 8px 0; }
+    .btn { border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 9px;
+      padding: 0.55rem 1.1rem; font-weight: 700; font-size: 0.95rem; cursor: pointer; }
     .btn:hover { background: #f2f4f7; }
     .btn:disabled { opacity: 0.4; cursor: default; }
     .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
     .btn.primary:hover { background: #1d4ed8; }
-    .deck-foot .spacer { flex: 1; }
-    .progress-label { font-size: 0.85rem; color: var(--muted); }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+    .stat { font-variant-numeric: tabular-nums; font-weight: 800; }
 
-    /* RL loop diagram */
-    .loop { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin: 10px 0 4px; }
-    .node {
-      border: 2px solid var(--line); border-radius: 12px; padding: 14px 16px; text-align: center;
-      transition: all 0.25s; background: #fff;
-    }
-    .node h4 { margin: 0 0 4px; font-size: 1.05rem; }
-    .node p { margin: 0; font-size: 0.85rem; color: var(--muted); }
-    .node.lit { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 4px 14px rgba(37,99,235,0.15); }
-    .edge { text-align: center; color: var(--muted); font-size: 0.82rem; }
-    .edge .arrow { font-size: 1.4rem; color: var(--accent); }
-    .loop-caption {
-      margin-top: 12px; padding: 12px 14px; border-radius: 10px;
-      background: var(--accent-soft); border: 1px solid #bfdbfe; font-size: 1rem; min-height: 3.2rem;
-    }
+    canvas { display: block; background: #f8fafc; border-radius: 10px; border: 1px solid var(--line);
+      image-rendering: pixelated; outline: none; touch-action: none; }
+    canvas:focus { box-shadow: 0 0 0 3px rgba(37,99,235,0.35); }
 
-    /* chips / toggles */
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
-    .chip {
-      border: 1px solid var(--line); border-radius: 999px; padding: 0.45rem 0.85rem; cursor: pointer;
-      font-weight: 700; font-size: 0.92rem; background: #fff; user-select: none;
-    }
-    .chip.on { background: var(--accent-soft); border-color: var(--accent); color: #1d4ed8; }
-    .chip.off { opacity: 0.55; }
-
-    .panel { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #fcfdff; margin: 10px 0; }
-    .panel h4 { margin: 0 0 8px; font-size: 1rem; }
-    .mono { font-family: ui-monospace, Menlo, monospace; }
-
-    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    @media (max-width: 680px) { .grid2, .loop { grid-template-columns: 1fr; } }
-
-    .obs-readout { font-family: ui-monospace, Menlo, monospace; font-size: 0.95rem; line-height: 1.7; }
-    .obs-hidden { color: #b42318; text-decoration: line-through; }
-
-    /* policy table */
-    table.policy { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
-    table.policy th, table.policy td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; }
-    table.policy th { background: #f2f4f7; }
-    table.policy select { font-size: 0.95rem; padding: 3px 6px; }
-
-    .reward-num { font-size: 2.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .reward-num.up { color: var(--good); }
-    .reward-num.down { color: #b42318; }
-
-    /* q-table */
-    .qgrid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px; align-items: center; }
-    .qcell {
-      border: 1px solid var(--line); border-radius: 8px; padding: 10px; text-align: center;
-      font-variant-numeric: tabular-nums; font-weight: 700; transition: background 0.3s;
-    }
-    .qcell.head { background: #f2f4f7; font-weight: 800; }
-    .qcell.best { background: #ecfdf3; border-color: var(--good); color: #027a48; }
-    .qcell.bumped { background: #fff7ed; border-color: var(--warn); }
+    .obs-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: #fcfdff; min-width: 220px; }
+    .obs-card h4 { margin: 0 0 8px; font-size: 1rem; }
+    .obs-grid3 { display: grid; grid-template-columns: repeat(3, 44px); grid-gap: 4px; }
+    .ocell { width: 44px; height: 44px; border-radius: 6px; border: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: center; font-size: 1.3rem; background: #fff; }
+    .ocell.me { background: #dbeafe; border-color: var(--accent); }
+    .ocell.unknown { background: #f2f4f7; color: #98a2b3; }
+    .pill { display:inline-block; padding: 0.2rem 0.5rem; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
+    .pill.good { background: #ecfdf3; color: #027a48; }
+    .pill.bad { background: #fef3f2; color: #b42318; }
+    .hint { font-size: 0.86rem; color: var(--muted); text-align: center; margin-top: 6px; }
+    .replays { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 700px) { .replays { grid-template-columns: 1fr; } }
+    .replay-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fcfdff; }
+    .replay-card h4 { margin: 0 0 4px; }
+    .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:0.9rem; color:var(--muted); margin:8px 0; }
+    .legend span b { color: var(--ink); }
+    .hidden { display: none; }
+    .big { font-size: 1.8rem; font-weight: 800; font-variant-numeric: tabular-nums; }
   </style>
 </head>
 <body>
   <div id="root">
-    <div class="deck">
-      <div class="deck-head">
+
+    <!-- 1. Hook + the game -->
+    <div class="section">
+      <div class="kicker">Reinforcement learning</div>
+      <h3>Play first: grab the gems, dodge the spikes</h3>
+      <p class="lead">You are the <b>agent</b>. Use the <b>arrow keys</b> to move around the grid.
+      Step on a 💎 for <b>+10</b>, hit a 🔺 for <b>−10</b>. You have a limited number of moves —
+      collect as much as you can.</p>
+      <p class="note"><b>The catch:</b> you can't see the whole board. Like a real agent, you only
+      get an <b>observation</b> — the cells right around you. Scroll down as you play to watch what
+      the agent &lsquo;sees&rsquo; and learns.</p>
+      <div class="row">
         <div>
-          <div class="kicker">Reinforcement Learning</div>
-          <h2 id="slide-title">—</h2>
+          <canvas id="game" width="360" height="360" tabindex="0"></canvas>
+          <div class="hint">Click the grid, then use ← ↑ → ↓ &nbsp;·&nbsp; <span id="moves-left"></span> moves left</div>
         </div>
-        <div class="deck-dots" id="dots"></div>
-      </div>
-      <div class="slide" id="slide-body"></div>
-      <div class="deck-foot">
-        <button class="btn" id="prev">‹ Back</button>
-        <span class="progress-label" id="progress"></span>
-        <span class="spacer"></span>
-        <button class="btn primary" id="next">Next ›</button>
+        <div class="obs-card">
+          <h4>What YOU see (the observation)</h4>
+          <div class="obs-grid3" id="obs-grid"></div>
+          <div class="legend" style="margin-top:10px;">
+            <span><b>💎</b> gem +10</span><span><b>🔺</b> spike −10</span><span><b>⬛</b> wall</span>
+          </div>
+          <hr style="border:none;border-top:1px solid var(--line);margin:10px 0;">
+          <div>Score: <span class="stat" id="score">0</span></div>
+          <div class="note" style="margin:4px 0 0;">The agent never sees the map — only this 3×3 window moves with it.</div>
+          <button class="btn" id="reset-game" style="margin-top:10px;">New board ↺</button>
+        </div>
       </div>
     </div>
+
+    <!-- 2. Concept callouts that unlock as they play -->
+    <div class="section">
+      <div class="kicker">What just happened</div>
+      <h3>The pieces of an RL problem</h3>
+      <div class="row">
+        <div class="obs-card" style="flex:1;">
+          <h4>👁️ Observation</h4>
+          <p class="note">What the agent perceives each step. Here, the 3×3 window around you — not
+          the full board. Two very different spots can <i>look</i> identical through this window.</p>
+        </div>
+        <div class="obs-card" style="flex:1;">
+          <h4>🎮 Action</h4>
+          <p class="note">The choices available: move up, down, left, or right. The agent picks one
+          action every step.</p>
+        </div>
+        <div class="obs-card" style="flex:1;">
+          <h4>🏆 Reward</h4>
+          <p class="note">The score signal: +10 for a gem, −10 for a spike. The agent's whole goal
+          is to collect as much reward as possible.</p>
+        </div>
+        <div class="obs-card" style="flex:1;">
+          <h4>🧭 Policy</h4>
+          <p class="note">The strategy that turns an observation into an action. You <i>were</i> a
+          policy while you played. Next we'll train one from your moves.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Train from their play -->
+    <div class="section" id="train-section">
+      <div class="kicker">Learning from you</div>
+      <h3>Now train agents from how you played</h3>
+      <p class="lead">Every move you made was an <b>(observation → action)</b> example, and every gem
+      or spike was a <b>reward</b>. We'll turn your run into two different learners:</p>
+      <div class="legend">
+        <span><b>Copycat (imitation):</b> learns to repeat the action you took for each thing you saw.</span><br>
+        <span><b>Optimizer (reward RL):</b> ignores your style and learns to chase the most reward.</span>
+      </div>
+      <div id="play-status" class="note"></div>
+      <button class="btn primary" id="train-btn" disabled>Play a round first…</button>
+    </div>
+
+    <!-- 4. Replays -->
+    <div class="section hidden" id="replay-section">
+      <div class="kicker">What they learned from you</div>
+      <h3>Watch the two agents play</h3>
+      <p class="note">Same board layout. The copycat mimics your habits; the optimizer tries to
+      maximize points. Sometimes the optimizer does better than its teacher!</p>
+      <div class="replays">
+        <div class="replay-card">
+          <h4>🐤 Copycat <span class="pill good" id="copy-score">—</span></h4>
+          <canvas id="copy-canvas" width="300" height="300"></canvas>
+          <p class="note" id="copy-note">Imitated your observation → action choices.</p>
+        </div>
+        <div class="replay-card">
+          <h4>🤖 Optimizer <span class="pill good" id="opt-score">—</span></h4>
+          <canvas id="opt-canvas" width="300" height="300"></canvas>
+          <p class="note" id="opt-note">Learned from the rewards with Q-learning.</p>
+        </div>
+      </div>
+      <div class="note" id="compare-note" style="margin-top:10px;"></div>
+      <button class="btn" id="replay-again" style="margin-top:8px;">Replay both ↻</button>
+    </div>
+
   </div>
 
   <script>
@@ -139,292 +160,263 @@
       const root = document.getElementById("root");
       streamlitMessage("streamlit:setFrameHeight", { height: root.scrollHeight + 8 });
     }
-    function sendValue(v) {
-      streamlitMessage("streamlit:setComponentValue", { value: v, dataType: "json" });
+
+    // ---- World ---------------------------------------------------------------
+    const N = 6;                 // grid size
+    const MAX_MOVES = 30;
+    const EMPTY = 0, GEM = 1, SPIKE = 2, WALL = 3;
+    const ACTIONS = ["up", "down", "left", "right"];
+    const DCELL = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+    const EMOJI = { [EMPTY]: "", [GEM]: "💎", [SPIKE]: "🔺", [WALL]: "⬛" };
+
+    let board, agent, score, movesLeft, trace, boardSeed;
+
+    function makeBoard(seed) {
+      // simple seeded RNG so replays use the same layout
+      let s = seed >>> 0;
+      const rng = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+      const b = [];
+      for (let y = 0; y < N; y++) { b.push([]); for (let x = 0; x < N; x++) b[y].push(EMPTY); }
+      const place = (type, n) => {
+        let placed = 0, guard = 0;
+        while (placed < n && guard++ < 500) {
+          const x = Math.floor(rng() * N), y = Math.floor(rng() * N);
+          if ((x === 0 && y === 0) || b[y][x] !== EMPTY) continue;
+          b[y][x] = type; placed++;
+        }
+      };
+      place(WALL, 4); place(GEM, 7); place(SPIKE, 5);
+      return b;
     }
 
-    let slideIndex = 0;
-    const state = {
-      // slide 2: which parts of the state are observable
-      observable: { cart: true, cartVel: true, angle: true, angleVel: true },
-      // slide 3 policy choices
-      policy: { leftTilt: "push_left", rightTilt: "push_right" },
-      // slide 4 reward toy
-      reward: 0,
-      // slide 5 q-table
-      q: { left: { L: 0, R: 0 }, right: { L: 0, R: 0 } },
-    };
+    function resetGame(seed) {
+      boardSeed = (seed === undefined) ? (Math.floor(Math.random() * 1e9)) : seed;
+      board = makeBoard(boardSeed);
+      agent = { x: 0, y: 0 };
+      score = 0; movesLeft = MAX_MOVES; trace = [];
+      drawGame(); drawObs(); updateStats();
+    }
 
-    // ---- Slides --------------------------------------------------------------
-    const slides = [
-      {
-        title: "What is reinforcement learning?",
-        render() {
-          return `
-            <p class="lead">In reinforcement learning, an <strong>agent</strong> learns by
-            <strong>trial and error</strong> inside an <strong>environment</strong>. There is no
-            answer key — it tries things, sees what happens, and gets a <strong>reward</strong>
-            telling it how well it did.</p>
-            <div class="loop">
-              <div class="node" data-node="agent"><h4>Agent</h4><p>the learner / decision-maker</p></div>
-              <div class="edge"><div class="arrow">→</div><span id="edge-act">action</span></div>
-              <div class="node" data-node="env"><h4>Environment</h4><p>the world it acts in</p></div>
-            </div>
-            <div class="loop">
-              <div class="edge" style="grid-column:1 / -1;"><span id="edge-back">observation + reward</span> <span class="arrow">↩</span></div>
-            </div>
-            <div class="loop-caption" id="loop-cap">Press <strong>Step the loop</strong> to walk through one cycle.</div>
-            <div class="chips"><button class="btn primary" id="loop-step">Step the loop ▶</button></div>
-          `;
-        },
-        mount() {
-          const steps = [
-            { node: "agent", cap: "<strong>1. Observe.</strong> The agent looks at the environment and gets an <em>observation</em> of the current situation." },
-            { node: "agent", cap: "<strong>2. Decide.</strong> Based on what it sees, the agent picks an <em>action</em> using its <em>policy</em>." },
-            { node: "env", cap: "<strong>3. Act.</strong> The action changes the environment — the world moves to a new situation." },
-            { node: "env", cap: "<strong>4. Reward.</strong> The environment hands back a <em>reward</em>: a number saying how good that was." },
-            { node: "agent", cap: "<strong>5. Repeat.</strong> Over many cycles the agent adjusts its policy to earn more reward. That loop <em>is</em> reinforcement learning." },
-          ];
-          let i = -1;
-          const btn = document.getElementById("loop-step");
-          btn.onclick = () => {
-            i = (i + 1) % steps.length;
-            const s = steps[i];
-            document.querySelectorAll(".node").forEach((n) => n.classList.toggle("lit", n.dataset.node === s.node));
-            document.getElementById("loop-cap").innerHTML = s.cap;
-            btn.textContent = i === steps.length - 1 ? "Start over ↺" : "Step the loop ▶";
-            setHeight();
-          };
-        },
-      },
+    function cellAt(x, y) {
+      if (x < 0 || y < 0 || x >= N || y >= N) return WALL;
+      return board[y][x];
+    }
 
-      {
-        title: "State vs. observation",
-        render() {
-          return `
-            <p class="lead">The <strong>state</strong> is everything true about the world right now.
-            An <strong>observation</strong> is only the part the agent actually gets to <em>see</em>.
-            They are not always the same — and what you let the agent observe changes what it can learn.</p>
-            <div class="grid2">
-              <div class="panel">
-                <h4>Toggle what the agent can observe</h4>
-                <div class="chips" id="obs-chips"></div>
-                <p class="note" style="margin:6px 0 0;">Click a signal to hide it from the agent.</p>
-              </div>
-              <div class="panel">
-                <h4>What the agent receives</h4>
-                <div class="obs-readout" id="obs-readout"></div>
-              </div>
-            </div>
-            <div class="loop-caption" id="obs-cap"></div>
-          `;
-        },
-        mount() {
-          const labels = { cart: "cart position", cartVel: "cart velocity", angle: "pole angle", angleVel: "pole spin" };
-          const sample = { cart: "0.12 m", cartVel: "-0.30 m/s", angle: "0.05 rad", angleVel: "0.20 rad/s" };
-          const chips = document.getElementById("obs-chips");
-          const readout = document.getElementById("obs-readout");
-          const cap = document.getElementById("obs-cap");
-          function paint() {
-            chips.innerHTML = Object.keys(labels).map((k) =>
-              `<span class="chip ${state.observable[k] ? "on" : "off"}" data-k="${k}">${labels[k]}</span>`).join("");
-            readout.innerHTML = Object.keys(labels).map((k) =>
-              state.observable[k]
-                ? `${labels[k]} = ${sample[k]}`
-                : `<span class="obs-hidden">${labels[k]} = (hidden)</span>`).join("<br>");
-            const hidden = Object.keys(labels).filter((k) => !state.observable[k]);
-            cap.innerHTML = hidden.length === 0
-              ? "The agent sees the full state — the observation equals the state."
-              : `The agent is <strong>blind</strong> to ${hidden.map((k) => labels[k]).join(", ")}. It must act on incomplete information — that can make the task much harder.`;
-            chips.querySelectorAll(".chip").forEach((c) => c.onclick = () => {
-              state.observable[c.dataset.k] = !state.observable[c.dataset.k];
-              paint(); setHeight();
-            });
-          }
-          paint();
-        },
-      },
+    // Observation = 3x3 window of cell types around the agent (walls for off-grid).
+    function observe(ax, ay) {
+      const o = [];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) o.push(cellAt(ax + dx, ay + dy));
+      return o; // length 9, index 4 is the center (agent)
+    }
+    function obsKey(o) { return o.join(""); }
 
-      {
-        title: "Actions and the policy",
-        render() {
-          return `
-            <p class="lead">An <strong>action</strong> is a choice the agent can make. The
-            <strong>policy</strong> is its strategy: a rule that maps <em>what it observes</em> to
-            <em>what it does</em>. Fill in a simple policy below.</p>
-            <table class="policy">
-              <tr><th>If the agent observes…</th><th>…it should take action</th></tr>
-              <tr>
-                <td>pole tilting <strong>left</strong></td>
-                <td>
-                  <select id="pol-left">
-                    <option value="push_left">push left</option>
-                    <option value="push_right">push right</option>
-                    <option value="do_nothing">do nothing</option>
-                  </select>
-                </td>
-              </tr>
-              <tr>
-                <td>pole tilting <strong>right</strong></td>
-                <td>
-                  <select id="pol-right">
-                    <option value="push_left">push left</option>
-                    <option value="push_right">push right</option>
-                    <option value="do_nothing">do nothing</option>
-                  </select>
-                </td>
-              </tr>
-            </table>
-            <div class="loop-caption" id="pol-cap"></div>
-          `;
-        },
-        mount() {
-          const left = document.getElementById("pol-left");
-          const right = document.getElementById("pol-right");
-          left.value = state.policy.leftTilt;
-          right.value = state.policy.rightTilt;
-          const cap = document.getElementById("pol-cap");
-          const niceAction = { push_left: "push left", push_right: "push right", do_nothing: "do nothing" };
-          function evaluate() {
-            state.policy.leftTilt = left.value;
-            state.policy.rightTilt = right.value;
-            const good = left.value === "push_right" && right.value === "push_left";
-            if (good) {
-              cap.innerHTML = "✓ Smart policy — push <em>toward</em> the lean to catch the pole. This simple rule already balances surprisingly well. A learned policy is just a much more detailed version of this table.";
-            } else {
-              cap.innerHTML = "Try it: a pole tilting left is falling left, so pushing <em>right</em> would slide the cart under it. What two choices would catch the pole each way?";
-            }
-            setHeight();
-          }
-          left.onchange = evaluate;
-          right.onchange = evaluate;
-          evaluate();
-        },
-      },
+    function step(action) {
+      if (movesLeft <= 0) return;
+      const o = observe(agent.x, agent.y);
+      const [dx, dy] = DCELL[action];
+      let nx = agent.x + dx, ny = agent.y + dy;
+      if (cellAt(nx, ny) === WALL) { nx = agent.x; ny = agent.y; } // blocked
+      let r = -0.2; // small step cost so dawdling isn't free
+      const here = cellAt(nx, ny);
+      if (here === GEM) { r += 10; board[ny][nx] = EMPTY; }
+      else if (here === SPIKE) { r -= 10; board[ny][nx] = EMPTY; }
+      trace.push({ obs: o, action, reward: r });
+      agent.x = nx; agent.y = ny; score += r; movesLeft--;
+      drawGame(); drawObs(); updateStats();
+      if (movesLeft === 0) finishRun();
+    }
 
-      {
-        title: "Reward: the goal in a number",
-        render() {
-          return `
-            <p class="lead">The agent does not know what &lsquo;good&rsquo; means until you tell it
-            with a <strong>reward</strong>. Every step, the environment returns a number; the agent's
-            only job is to collect as much of it as possible. <strong>How you define reward defines
-            the behavior you get.</strong></p>
-            <div class="panel" style="text-align:center;">
-              <div>Total reward this episode</div>
-              <div class="reward-num" id="reward-num">0</div>
-              <div class="chips" style="justify-content:center;">
-                <button class="btn" data-r="1">Pole stayed up (+1)</button>
-                <button class="btn" data-r="-1">Pole drifted (−1)</button>
-                <button class="btn" data-r="-10">Pole fell (−10)</button>
-              </div>
-            </div>
-            <div class="loop-caption">Imagine thousands of these adding up. The agent will chase
-            whatever makes this number bigger — so a careless reward can teach the wrong thing.</div>
-          `;
-        },
-        mount() {
-          const num = document.getElementById("reward-num");
-          num.textContent = state.reward;
-          document.querySelectorAll("[data-r]").forEach((b) => b.onclick = () => {
-            const d = Number(b.dataset.r);
-            state.reward += d;
-            num.textContent = state.reward;
-            num.className = "reward-num " + (d >= 0 ? "up" : "down");
-          });
-        },
-      },
+    function finishRun() { onRoundDone(); }
 
-      {
-        title: "Q-learning: learning what's good",
-        render() {
-          return `
-            <p class="lead">How does the agent <em>learn</em> a policy? One classic way is
-            <strong>Q-learning</strong>. It keeps a table of <strong>Q-values</strong>: an estimate of
-            &lsquo;how much reward I expect if I take this action in this situation.&rsquo; Acting and
-            seeing rewards nudges those numbers; the best action is just the highest Q-value.</p>
-            <div class="panel">
-              <div class="qgrid" id="qgrid"></div>
-              <div class="chips" style="margin-top:12px;">
-                <button class="btn primary" id="q-step">Take a step &amp; learn ▶</button>
-                <button class="btn" id="q-reset">Reset</button>
-              </div>
-            </div>
-            <div class="loop-caption" id="q-cap">The table starts at zero — the agent knows nothing.
-            Each step it tries an action, gets a reward, and updates that cell toward what it saw.</div>
-          `;
-        },
-        mount() {
-          const grid = document.getElementById("qgrid");
-          const cap = document.getElementById("q-cap");
-          // "reward model" for the toy: in left-tilt, pushing right is good; mirror for right-tilt.
-          const trueReward = { left: { L: -1, R: 1 }, right: { L: 1, R: -1 } };
-          let lastCell = null;
-          function paint() {
-            const cells = [];
-            cells.push(`<div class="qcell head"></div><div class="qcell head">push left</div><div class="qcell head">push right</div>`);
-            for (const s of ["left", "right"]) {
-              cells.push(`<div class="qcell head">tilt ${s}</div>`);
-              for (const a of ["L", "R"]) {
-                const best = state.q[s].R !== state.q[s].L && state.q[s][a] === Math.max(state.q[s].L, state.q[s].R) && state.q[s][a] !== 0;
-                const bumped = lastCell && lastCell[0] === s && lastCell[1] === a;
-                cells.push(`<div class="qcell ${best ? "best" : ""} ${bumped ? "bumped" : ""}">${state.q[s][a].toFixed(2)}</div>`);
-              }
-            }
-            grid.innerHTML = cells.join("");
-          }
-          document.getElementById("q-step").onclick = () => {
-            const s = Math.random() < 0.5 ? "left" : "right";
-            const a = Math.random() < 0.5 ? "L" : "R";
-            const r = trueReward[s][a];
-            const alpha = 0.5;
-            state.q[s][a] += alpha * (r - state.q[s][a]); // simple update toward observed reward
-            lastCell = [s, a];
-            const niceA = a === "L" ? "push left" : "push right";
-            cap.innerHTML = `Tried <strong>${niceA}</strong> while tilting <strong>${s}</strong>, got reward <strong>${r > 0 ? "+" : ""}${r}</strong>. That cell moved toward ${r}. Keep stepping — the good actions rise, the bad ones fall, and a policy emerges.`;
-            paint(); setHeight();
-          };
-          document.getElementById("q-reset").onclick = () => {
-            state.q = { left: { L: 0, R: 0 }, right: { L: 0, R: 0 } };
-            lastCell = null;
-            cap.innerHTML = "Back to zero. The agent knows nothing again.";
-            paint(); setHeight();
-          };
-          paint();
-        },
-      },
-    ];
+    // ---- Rendering -----------------------------------------------------------
+    const game = document.getElementById("game");
+    const gctx = game.getContext("2d");
+    const CELL = game.width / N;
 
-    // ---- Deck plumbing -------------------------------------------------------
-    function renderSlide() {
-      const s = slides[slideIndex];
-      document.getElementById("slide-title").textContent = s.title;
-      document.getElementById("slide-body").innerHTML = s.render();
-      if (s.mount) s.mount();
-      document.getElementById("dots").innerHTML = slides.map((_, i) =>
-        `<span class="deck-dot ${i === slideIndex ? "active" : ""}"></span>`).join("");
-      document.getElementById("progress").textContent = `${slideIndex + 1} of ${slides.length}`;
-      document.getElementById("prev").disabled = slideIndex === 0;
-      const next = document.getElementById("next");
-      next.textContent = slideIndex === slides.length - 1 ? "Finish — start the pendulum ›" : "Next ›";
+    function drawBoardOn(ctx, b, a, cell, revealAll) {
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        ctx.fillStyle = ((x + y) % 2 === 0) ? "#f8fafc" : "#eef2f7";
+        ctx.fillRect(x * cell, y * cell, cell, cell);
+        const t = b[y][x];
+        if (t !== EMPTY) {
+          ctx.font = (cell * 0.6) + "px serif";
+          ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillText(EMOJI[t], x * cell + cell / 2, y * cell + cell / 2 + 1);
+        }
+      }
+      // grid lines
+      ctx.strokeStyle = "#e4e7ec"; ctx.lineWidth = 1;
+      for (let i = 0; i <= N; i++) {
+        ctx.beginPath(); ctx.moveTo(i * cell, 0); ctx.lineTo(i * cell, N * cell); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i * cell); ctx.lineTo(N * cell, i * cell); ctx.stroke();
+      }
+      // agent
+      ctx.font = (cell * 0.62) + "px serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("🙂", a.x * cell + cell / 2, a.y * cell + cell / 2 + 1);
+    }
+
+    function drawGame() { drawBoardOn(gctx, board, agent, CELL, true); }
+
+    function drawObs() {
+      const o = observe(agent.x, agent.y);
+      const host = document.getElementById("obs-grid");
+      host.innerHTML = o.map((t, i) => {
+        const me = i === 4;
+        const sym = me ? "🙂" : EMOJI[t];
+        return `<div class="ocell ${me ? "me" : ""}">${sym}</div>`;
+      }).join("");
+    }
+
+    function updateStats() {
+      document.getElementById("score").textContent = score.toFixed(1);
+      document.getElementById("moves-left").textContent = movesLeft;
+    }
+
+    // ---- Input ---------------------------------------------------------------
+    game.addEventListener("pointerdown", () => game.focus());
+    game.addEventListener("keydown", (e) => {
+      const map = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
+      if (map[e.key]) { e.preventDefault(); step(map[e.key]); }
+    });
+    document.getElementById("reset-game").onclick = () => { resetGame(); resetTrainingUI(); };
+
+    // ---- Training ------------------------------------------------------------
+    function onRoundDone() {
+      const btn = document.getElementById("train-btn");
+      const status = document.getElementById("play-status");
+      if (trace.length === 0) return;
+      const gems = trace.filter((t) => t.reward >= 9).length;
+      status.innerHTML = `You finished with <b>${score.toFixed(1)}</b> points over ${trace.length} moves`
+        + ` (grabbed ${gems} gem${gems === 1 ? "" : "s"}). That's ${trace.length} examples to learn from.`;
+      btn.disabled = false;
+      btn.textContent = "Train the two agents ▶";
+      setHeight();
+    }
+    function resetTrainingUI() {
+      document.getElementById("train-btn").disabled = true;
+      document.getElementById("train-btn").textContent = "Play a round first…";
+      document.getElementById("play-status").innerHTML = "";
+      document.getElementById("replay-section").classList.add("hidden");
       setHeight();
     }
 
-    document.getElementById("prev").onclick = () => {
-      if (slideIndex > 0) { slideIndex--; renderSlide(); }
-    };
-    document.getElementById("next").onclick = () => {
-      if (slideIndex < slides.length - 1) { slideIndex++; renderSlide(); }
-      else { sendValue({ done: true, ts: Date.now() }); }
+    // Copycat: most common action per observation key.
+    function trainCopycat(tr) {
+      const counts = {};
+      for (const t of tr) {
+        const k = obsKey(t.obs);
+        counts[k] = counts[k] || {};
+        counts[k][t.action] = (counts[k][t.action] || 0) + 1;
+      }
+      const pol = {};
+      for (const k in counts) {
+        let best = null, bn = -1;
+        for (const a in counts[k]) if (counts[k][a] > bn) { bn = counts[k][a]; best = a; }
+        pol[k] = best;
+      }
+      return pol; // obsKey -> action
+    }
+
+    // Optimizer: tabular Q-learning over the player's transitions, replayed many
+    // times (experience replay) so the reward signal — not the player's style —
+    // shapes it.
+    function trainOptimizer(tr) {
+      const Q = {};
+      const ensure = (k) => { if (!Q[k]) Q[k] = { up: 0, down: 0, left: 0, right: 0 }; return Q[k]; };
+      const alpha = 0.4, gamma = 0.9;
+      for (let epoch = 0; epoch < 200; epoch++) {
+        for (let i = 0; i < tr.length; i++) {
+          const t = tr[i];
+          const k = obsKey(t.obs);
+          const qk = ensure(k);
+          let future = 0;
+          if (i + 1 < tr.length) {
+            const nk = obsKey(tr[i + 1].obs);
+            const nq = ensure(nk);
+            future = Math.max(nq.up, nq.down, nq.left, nq.right);
+          }
+          qk[t.action] += alpha * (t.reward + gamma * future - qk[t.action]);
+        }
+      }
+      return Q; // obsKey -> {action: q}
+    }
+
+    function actFromCopycat(pol, o) {
+      const k = obsKey(o);
+      return pol[k] || ACTIONS[Math.floor(Math.random() * 4)];
+    }
+    function actFromOptimizer(Q, o) {
+      const k = obsKey(o);
+      const q = Q[k];
+      if (!q) return ACTIONS[Math.floor(Math.random() * 4)];
+      let best = "up", bv = -Infinity;
+      for (const a of ACTIONS) if (q[a] > bv) { bv = q[a]; best = a; }
+      return best;
+    }
+
+    // Roll out a policy on the same board layout and animate it.
+    function rolloutAndAnimate(canvas, policyFn, label, scorePill, doneCb) {
+      const ctx = canvas.getContext("2d");
+      const cell = canvas.width / N;
+      const b = makeBoard(boardSeed);
+      const a = { x: 0, y: 0 };
+      let s = 0, moves = MAX_MOVES;
+      drawBoardOn(ctx, b, a, cell, true);
+      const tick = () => {
+        if (moves <= 0) { scorePill.textContent = s.toFixed(1) + " pts"; if (doneCb) doneCb(s); return; }
+        const o = [];
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const cx = a.x + dx, cy = a.y + dy;
+          o.push((cx < 0 || cy < 0 || cx >= N || cy >= N) ? WALL : b[cy][cx]);
+        }
+        const act = policyFn(o);
+        const [dx, dy] = DCELL[act];
+        let nx = a.x + dx, ny = a.y + dy;
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N || b[ny][nx] === WALL) { nx = a.x; ny = a.y; }
+        s -= 0.2;
+        if (b[ny][nx] === GEM) { s += 10; b[ny][nx] = EMPTY; }
+        else if (b[ny][nx] === SPIKE) { s -= 10; b[ny][nx] = EMPTY; }
+        a.x = nx; a.y = ny; moves--;
+        drawBoardOn(ctx, b, a, cell, true);
+        scorePill.textContent = s.toFixed(1) + " pts";
+        setTimeout(tick, 220);
+      };
+      setTimeout(tick, 250);
+    }
+
+    document.getElementById("train-btn").onclick = () => {
+      const copycat = trainCopycat(trace);
+      const optimizer = trainOptimizer(trace);
+      document.getElementById("replay-section").classList.remove("hidden");
+      setHeight();
+      let copyScore = null, optScore = null;
+      const maybeCompare = () => {
+        if (copyScore === null || optScore === null) return;
+        const cn = document.getElementById("compare-note");
+        if (optScore > copyScore + 1)
+          cn.innerHTML = `The <b>optimizer</b> (${optScore.toFixed(1)}) beat the <b>copycat</b> (${copyScore.toFixed(1)}). Learning from <i>reward</i> let it improve on your example, not just copy it.`;
+        else if (copyScore > optScore + 1)
+          cn.innerHTML = `The <b>copycat</b> (${copyScore.toFixed(1)}) edged out the optimizer (${optScore.toFixed(1)}) this time — with only one short run to learn from, imitation can win. More play data would help the optimizer.`;
+        else
+          cn.innerHTML = `Both landed around the same score. With more moves to learn from, the optimizer usually pulls ahead because it chases reward directly.`;
+        setHeight();
+      };
+      rolloutAndAnimate(document.getElementById("copy-canvas"), (o) => actFromCopycat(copycat, o),
+        "copycat", document.getElementById("copy-score"), (s) => { copyScore = s; maybeCompare(); });
+      rolloutAndAnimate(document.getElementById("opt-canvas"), (o) => actFromOptimizer(optimizer, o),
+        "optimizer", document.getElementById("opt-score"), (s) => { optScore = s; maybeCompare(); });
     };
 
+    document.getElementById("replay-again").onclick = () => document.getElementById("train-btn").click();
+
     window.addEventListener("message", (event) => {
-      const data = event.data || {};
-      if (data.type !== "streamlit:render") return;
+      if ((event.data || {}).type !== "streamlit:render") return;
       setHeight();
     });
 
-    renderSlide();
+    resetGame();
     setHeight();
     ready();
   </script>

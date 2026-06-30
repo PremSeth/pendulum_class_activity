@@ -60,6 +60,35 @@
     .barwrap { display:flex; gap:14px; align-items:flex-end; }
     .hint { font-size:.86rem; color:var(--muted); text-align:center; margin-top:6px; }
     .big { font-size:1.9rem; font-weight:800; font-variant-numeric:tabular-nums; }
+
+    /* Big prominent score above the map */
+    .score-banner {
+      display:flex; align-items:baseline; justify-content:center; gap:10px;
+      margin:0 0 8px; padding:6px 14px; border-radius:12px;
+      background:#0b1220; border:1px solid #1e293b;
+    }
+    .score-label { font-size:0.8rem; letter-spacing:0.15em; color:#94a3b8; font-weight:800; }
+    .score-value {
+      font-size:2.6rem; font-weight:900; font-variant-numeric:tabular-nums; color:#e5e7eb;
+      transition:color 0.15s, transform 0.15s; line-height:1;
+    }
+    .score-value.bump-up { color:#34d399; transform:scale(1.18); }
+    .score-value.bump-down { color:#f87171; transform:scale(1.18); }
+
+    /* Floating +/- reward popup over the map */
+    .play-stage { position:relative; display:inline-block; }
+    .reward-pop {
+      position:absolute; left:50%; top:8px; transform:translateX(-50%);
+      font-size:1.8rem; font-weight:900; font-variant-numeric:tabular-nums;
+      pointer-events:none; opacity:0; text-shadow:0 2px 6px rgba(0,0,0,0.5);
+    }
+    .reward-pop.show-up { animation:floatUp 0.85s ease-out; color:#34d399; }
+    .reward-pop.show-down { animation:floatUp 0.85s ease-out; color:#f87171; }
+    @keyframes floatUp {
+      0% { opacity:0; transform:translateX(-50%) translateY(8px) scale(0.8); }
+      20% { opacity:1; transform:translateX(-50%) translateY(0) scale(1.1); }
+      100% { opacity:0; transform:translateX(-50%) translateY(-34px) scale(1); }
+    }
   </style>
 </head>
 <body>
@@ -94,10 +123,16 @@
       <div class="rounds" id="rounds"></div>
       <div class="row" style="align-items:flex-start;">
         <div class="center">
-          <canvas id="play" width="300" height="300" tabindex="0"></canvas>
+          <div class="score-banner">
+            <span class="score-label">SCORE</span>
+            <span class="score-value" id="score-big">0</span>
+          </div>
+          <div class="play-stage">
+            <canvas id="play" width="300" height="300" tabindex="0"></canvas>
+            <div class="reward-pop" id="reward-pop"></div>
+          </div>
           <div class="hud">
             <span class="chip" id="moves-chip">Moves left: —</span>
-            <span class="chip good" id="score-chip">Score: 0</span>
           </div>
           <div class="hint">Click the grid, then steer with ← ↑ → ↓</div>
         </div>
@@ -274,7 +309,24 @@
       const m=document.getElementById("moves-chip");
       m.textContent="Moves left: "+cur.moves;
       m.className="chip"+(cur.moves<=8?" warn":"");
-      document.getElementById("score-chip").textContent="Score: "+cur.score.toFixed(1);
+      const big=document.getElementById("score-big");
+      big.textContent=cur.score.toFixed(1);
+    }
+
+    function flashReward(r){
+      // Big number pulse
+      const big=document.getElementById("score-big");
+      big.classList.remove("bump-up","bump-down");
+      void big.offsetWidth; // restart transition
+      big.classList.add(r>=0 ? "bump-up" : "bump-down");
+      setTimeout(()=>big.classList.remove("bump-up","bump-down"), 200);
+      // Floating +/- popup over the map
+      const pop=document.getElementById("reward-pop");
+      pop.classList.remove("show-up","show-down");
+      void pop.offsetWidth;
+      const sign = r>=0 ? "+" : "−";
+      pop.textContent = sign + Math.abs(r).toFixed(1);
+      pop.classList.add(r>=0 ? "show-up" : "show-down");
     }
 
     function playerStep(action){
@@ -283,6 +335,7 @@
       cur.a.x=o.nx; cur.a.y=o.ny; cur.hist=pushHist(cur.hist,action);
       cur.score+=o.reward; cur.moves--;
       drawPlay(); drawObs(); updateHud();
+      flashReward(o.reward);
       if(o.won){ endRound("goal"); }
       else if(o.died){ endRound("died"); }
       else if(cur.moves<=0){ endRound("timeout"); }
